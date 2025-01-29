@@ -1,0 +1,39 @@
+{
+  "name": "selfi-bot",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write src/**/*.ts",
+    "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@fal-ai/serverless": "^0.8.0",
+    "@prisma/client": "^5.8.0",
+    "aws-sdk": "^2.1531.0",
+    "dotenv": "^16.3.1",
+    "fastify": "^4.25.0",
+    "grammy": "^1.21.0",
+    "@grammyjs/runner": "^2.0.0",
+    "@grammyjs/auto-retry": "^1.1.1",
+    "pino": "^8.17.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^6.18.0",
+    "@typescript-eslint/parser": "^6.18.0",
+    "eslint": "^8.56.0",
+    "prettier": "^3.1.0",
+    "prisma": "^5.8.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.1.0"
+  }
+}
