@@ -1,11 +1,11 @@
 import { Bot, session } from 'grammy';
 import { autoRetry } from '@grammyjs/auto-retry';
 import { run } from '@grammyjs/runner';
-import { BotContext } from './types/bot';
+import { BotContext } from './types/bot.js';
 import { config } from './config.js';
-import { setupCommands } from './bot/commands';
-import { setupServer } from './server';
-import { logger } from './lib/logger';
+import { setupCommands } from './bot/commands/index.js';
+import { setupServer } from './server/index.js';
+import { logger } from './lib/logger.js';
 
 // Create bot instance
 const bot = new Bot<BotContext>(config.TELEGRAM_BOT_TOKEN);
