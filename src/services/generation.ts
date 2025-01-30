@@ -1,7 +1,7 @@
 import { fal } from '@fal-ai/client';
 import { PrismaClient } from '@prisma/client';
-import { config } from '../config';
-import { logger } from '../lib/logger';
+import { config } from '../config.js';
+import { logger } from '../lib/logger.js';
 
 // Initialize FAL client
 fal.config({ credentials: config.FAL_KEY });
