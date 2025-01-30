@@ -59,6 +59,18 @@ export class FalService {
     }
   }
 
+  private validateQueueResponse(response: any): response is FalQueueResponse {
+    if (!response || typeof response !== 'object') return false;
+    if (typeof response.status !== 'string') return false;
+    if (typeof response.request_id !== 'string') return false;
+    if (typeof response.response_url !== 'string') return false;
+    if (typeof response.status_url !== 'string') return false;
+    if (typeof response.cancel_url !== 'string') return false;
+    if (!Array.isArray(response.logs)) return false;
+    if (typeof response.metrics !== 'object') return false;
+    return true;
+  }
+
   public async generateImage(prompt: string, negativePrompt?: string): Promise<string> {
     let retries = 0;
     
@@ -87,7 +99,11 @@ export class FalService {
           throw new FalError(`Queue request failed: ${error}`);
         }
 
-        const queueData = await queueResponse.json();
+        const rawQueueData = await queueResponse.json();
+        if (!this.validateQueueResponse(rawQueueData)) {
+          throw new FalError('Invalid queue response format');
+        }
+        const queueData = rawQueueData;
         logger.info({ queue: queueData }, 'Generation queue update');
 
         // Poll for completion
@@ -104,7 +120,11 @@ export class FalService {
             throw new FalError(`Status check failed: ${error}`);
           }
 
-          const statusData = await statusResponse.json();
+          const rawStatusData = await statusResponse.json();
+          if (!this.validateQueueResponse(rawStatusData)) {
+            throw new FalError('Invalid status response format');
+          }
+          const statusData = rawStatusData;
           logger.info({ queue: statusData }, 'Generation queue update');
 
           if (statusData.status === 'COMPLETED') {
