@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "prisma": {
-    "seed": "node --loader tsx/esm prisma/seed.ts"
+    "seed": "node --import tsx prisma/seed.ts"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
