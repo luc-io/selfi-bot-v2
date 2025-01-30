@@ -22,15 +22,25 @@ interface FalRequest {
   lora_path?: string;
   lora_scale?: number;
   seed?: number;
+  image_size?: 'landscape_4_3' | 'portrait_4_3' | 'square' | { width: number; height: number };
+  num_inference_steps?: number;
+  guidance_scale?: number;
 }
 
 interface FalResponse {
   image: {
     url: string;
+    width?: number;
+    height?: number;
+    content_type: string;
   };
+  seed?: number;
+  has_nsfw_concepts?: boolean[];
+  prompt: string;
 }
 
 const DEFAULT_BASE_MODEL_ID = 'flux-default';
+const DEFAULT_IMAGE_SIZE = 'landscape_4_3';
 
 export class GenerationService {
   static async generate(userId: string, options: GenerationOptions) {
@@ -41,13 +51,16 @@ export class GenerationService {
     let error: string | null = null;
 
     try {
-      const result = await fal.subscribe('fal-ai/flux-party', {
+      const result = await fal.subscribe('fal-ai/flux-lora', {
         input: {
           prompt,
           negative_prompt: negativePrompt,
           lora_path: loraPath,
           lora_scale: loraScale,
           seed,
+          image_size: DEFAULT_IMAGE_SIZE,
+          num_inference_steps: 28,
+          guidance_scale: 3.5,
         } as FalRequest,
         pollInterval: 1000,
         logs: true,
