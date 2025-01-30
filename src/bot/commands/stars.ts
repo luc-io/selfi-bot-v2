@@ -9,10 +9,10 @@ const composer = new Composer<BotContext>();
 composer.command('stars', async (ctx) => {
   try {
     const starPacks = [
-      { stars: 5, price: 99, label: '5 ⭐' },
-      { stars: 10, price: 149, label: '10 ⭐' },
-      { stars: 20, price: 249, label: '20 ⭐' },
-      { stars: 50, price: 499, label: '50 ⭐' },
+      { stars: 5, price: 5, label: '5 ⭐' },
+      { stars: 10, price: 10, label: '10 ⭐' },
+      { stars: 20, price: 20, label: '20 ⭐' },
+      { stars: 50, price: 50, label: '50 ⭐' },
     ];
 
     const buttons = starPacks.map((pack) => [
