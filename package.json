@@ -14,7 +14,7 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@fal-ai/sdk": "^0.8.0",
+    "@fal-ai/client": "^1.2.1",
     "@prisma/client": "^5.8.0",
     "aws-sdk": "^2.1531.0",
     "dotenv": "^16.3.1",
