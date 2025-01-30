@@ -1,42 +1,41 @@
-import { Context } from 'grammy';
-import { prisma } from '../../lib/prisma';
+import { Composer } from 'grammy';
+import { BotContext } from '../../types/bot';
+import { PrismaClient } from '@prisma/client';
 import { logger } from '../../lib/logger';
 
-export async function startHandler(ctx: Context) {
-  try {
-    const telegramId = ctx.from?.id.toString();
-    const username = ctx.from?.username;
+const prisma = new PrismaClient();
+const composer = new Composer<BotContext>();
 
-    if (!telegramId) {
-      await ctx.reply('Error: Could not identify user');
+composer.command('start', async (ctx) => {
+  try {
+    if (!ctx.from?.id) {
+      await ctx.reply('Could not identify user');
       return;
     }
 
-    // Get or create user
+    // Create or get user
     const user = await prisma.user.upsert({
-      where: { telegramId },
-      update: { username },
+      where: { telegramId: ctx.from.id.toString() },
+      update: {
+        username: ctx.from.username ?? null
+      },
       create: {
-        id: telegramId,
-        telegramId,
-        username,
-        stars: 10 // Welcome bonus
+        id: ctx.from.id.toString(),
+        telegramId: ctx.from.id.toString(),
+        username: ctx.from.username ?? null,
+        stars: 1, // Give 1 free star
       }
     });
 
-    // Welcome message
     await ctx.reply(
-      `Welcome to Selfi Bot! 🤖✨\n\n` +
-      `I can help you generate images using AI and train your own styles.\n\n` +
-      `🌟 You have ${user.stars} stars to start with.\n\n` +
-      `Commands:\n` +
-      `/gen - Generate an image\n` +
-      `/balance - Check your stars balance\n\n` +
-      `You can also use our mini app to train your own styles!`
+      `Welcome to Selfi! 🤖✨\n\nI can help you generate amazing images using AI. Each generation costs 1 star. ${
+        user.stars > 0 ? `\n\nYou have ${user.stars} ⭐` : ''
+      }\n\nCommands:\n/gen - Generate an image\n/stars - Get more stars`
     );
-
   } catch (error) {
-    logger.error('Error in start command:', error);
-    await ctx.reply('Sorry, something went wrong. Please try again later.');
+    logger.error({ error }, 'Failed to start bot');
+    await ctx.reply('Sorry, something went wrong while starting the bot.');
   }
-}
+});
+
+export { composer as startCommand };
