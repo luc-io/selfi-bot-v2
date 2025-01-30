@@ -24,6 +24,12 @@ interface FalRequest {
   seed?: number;
 }
 
+interface FalResponse {
+  image: {
+    url: string;
+  };
+}
+
 const DEFAULT_BASE_MODEL_ID = 'flux-default';
 
 export class GenerationService {
@@ -50,7 +56,7 @@ export class GenerationService {
         },
       });
 
-      const response = result as { image: { url: string } };
+      const response = result as unknown as FalResponse;
       if (!response?.image?.url) {
         throw new Error('No image URL in response');
       }
