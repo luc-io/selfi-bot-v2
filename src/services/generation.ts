@@ -16,10 +16,11 @@ interface GenerationOptions {
   seed?: number;
 }
 
-interface FalResponse {
-  image: {
-    url: string;
-  };
+interface FalRequest {
+  prompt: string;
+  negative_prompt?: string;
+  lora_path?: string;
+  lora_scale?: number;
   seed?: number;
 }
 
@@ -34,14 +35,14 @@ export class GenerationService {
     let error: string | null = null;
 
     try {
-      const result = await fal.subscribe<FalResponse>('fal-ai/flux-party', {
+      const result = await fal.subscribe('fal-ai/flux-party', {
         input: {
           prompt,
           negative_prompt: negativePrompt,
           lora_path: loraPath,
           lora_scale: loraScale,
           seed,
-        },
+        } as FalRequest,
         pollInterval: 1000,
         logs: true,
         onQueueUpdate: (update: { status: string; position?: number }) => {
@@ -49,11 +50,12 @@ export class GenerationService {
         },
       });
 
-      if (!result?.image?.url) {
+      const response = result as { image: { url: string } };
+      if (!response?.image?.url) {
         throw new Error('No image URL in response');
       }
 
-      imageUrl = result.image.url;
+      imageUrl = response.image.url;
 
       // Save generation to database
       await prisma.generation.create({
