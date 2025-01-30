@@ -1,7 +1,7 @@
 import { Composer } from 'grammy';
-import { BotContext } from '../../types/bot';
-import { logger } from '../../lib/logger';
-import { createPayment } from '../../lib/payments';
+import { BotContext } from '../../types/bot.js';
+import { logger } from '../../lib/logger.js';
+import { createPayment } from '../../lib/payments.js';
 
 const composer = new Composer<BotContext>();
 
