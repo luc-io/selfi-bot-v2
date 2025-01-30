@@ -1,5 +1,4 @@
-// Prisma schema
-
+// This is your Prisma schema file
 generator client {
   provider = "prisma-client-js"
 }
@@ -18,6 +17,7 @@ model User {
   totalBoughtStars  Int          @default(0)
   generations       Generation[]
   models            LoraModel[]
+  trainings         Training[]   // Added this relation
   starTransactions  StarTransaction[]
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
