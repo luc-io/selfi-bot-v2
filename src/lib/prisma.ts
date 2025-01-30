@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { logger } from './logger.js';
 
 const prisma = new PrismaClient({
@@ -14,7 +14,7 @@ const prisma = new PrismaClient({
   ],
 });
 
-prisma.$on('query', (e: { query: string; duration: number }) => {
+prisma.$on('query', (e: Prisma.QueryEvent) => {
   logger.debug(
     {
       query: e.query,
@@ -24,7 +24,7 @@ prisma.$on('query', (e: { query: string; duration: number }) => {
   );
 });
 
-prisma.$on('error', (e: { message: string; target: string[] }) => {
+prisma.$on('error', (e: Prisma.LogEvent) => {
   logger.error(
     {
       message: e.message,
