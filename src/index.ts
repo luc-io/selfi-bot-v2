@@ -2,7 +2,7 @@ import { Bot, session } from 'grammy';
 import { autoRetry } from '@grammyjs/auto-retry';
 import { run } from '@grammyjs/runner';
 import { BotContext } from './types/bot';
-import { config } from './config';
+import { config } from './config.js';
 import { setupCommands } from './bot/commands';
 import { setupServer } from './server';
 import { logger } from './lib/logger';
