@@ -1,8 +1,8 @@
 import { Bot } from 'grammy';
-import { BotContext } from '../../types/bot';
-import { startCommand } from './start';
-import genCommand from './gen';
-import starsCommand from './stars';
+import { BotContext } from '../../types/bot.js';
+import { startCommand } from './start.js';
+import genCommand from './gen.js';
+import starsCommand from './stars.js';
 
 export function setupCommands(bot: Bot<BotContext>) {
   bot.use(startCommand);
