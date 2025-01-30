@@ -35,13 +35,19 @@ composer.command('stars', async (ctx) => {
 // Handle star pack selection
 composer.callbackQuery(/buy_stars:(\d+):(\d+)/, async (ctx) => {
   try {
-    const [stars, price] = ctx.match.slice(1).map(Number);
+    if (!ctx.match || !Array.isArray(ctx.match)) {
+      await ctx.answerCallbackQuery('Invalid selection');
+      return;
+    }
+
+    const stars = Number(ctx.match[1]);
+    const price = Number(ctx.match[2]);
     const dollarsAmount = price / 100;
 
     const invoice = {
       title: `${stars} Stars Package`,
       description: `Buy ${stars} stars for generating images with Selfi`,
-      payload: `stars_${stars}_${ctx.from.id}`,
+      payload: `stars_${stars}_${ctx.from?.id}`,
       currency: 'USD',
       prices: [{ label: `${stars} Stars`, amount: price }],
     };
@@ -62,16 +68,7 @@ composer.callbackQuery(/buy_stars:(\d+):(\d+)/, async (ctx) => {
 });
 
 // Handle successful payment
-composer.on('pre_checkout_query', async (ctx) => {
-  try {
-    await ctx.answerPreCheckoutQuery(true);
-  } catch (error) {
-    logger.error({ error }, 'Failed to answer pre checkout query');
-    await ctx.answerPreCheckoutQuery(false, 'Payment failed');
-  }
-});
-
-composer.on('successful_payment', async (ctx) => {
+composer.on(':successful_payment', async (ctx) => {
   try {
     const payment = ctx.message?.successful_payment;
     if (!payment) return;
