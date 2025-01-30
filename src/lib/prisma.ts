@@ -1,32 +1,47 @@
 import { PrismaClient } from '@prisma/client';
-import { logger } from './logger';
+import { logger } from './logger.js';
 
-const prismaLogger = logger.child({ module: 'prisma' });
-
-export const prisma = new PrismaClient({
+const prisma = new PrismaClient({
   log: [
-    { emit: 'event', level: 'query' },
-    { emit: 'event', level: 'error' },
-    { emit: 'event', level: 'warn' }
-  ]
+    {
+      emit: 'event',
+      level: 'query',
+    },
+    {
+      emit: 'event',
+      level: 'error',
+    },
+  ],
 });
 
-// Log queries in development
-prisma.$on('query', (e) => {
-  prismaLogger.debug(e);
+prisma.$on('query', (e: { query: string; duration: number }) => {
+  logger.debug(
+    {
+      query: e.query,
+      duration: `${e.duration}ms`,
+    },
+    'Prisma Query'
+  );
 });
 
-// Log errors
-prisma.$on('error', (e) => {
-  prismaLogger.error(e);
+prisma.$on('error', (e: { message: string; target: string[] }) => {
+  logger.error(
+    {
+      message: e.message,
+      target: e.target,
+    },
+    'Prisma Error'
+  );
 });
 
-// Handle connection
-prisma.$connect()
+prisma
+  .$connect()
   .then(() => {
-    prismaLogger.info('Connected to database');
+    logger.info('Connected to database');
   })
-  .catch((error) => {
-    prismaLogger.error('Failed to connect to database:', error);
+  .catch((error: Error) => {
+    logger.error({ error }, 'Failed to connect to database');
     process.exit(1);
   });
+
+export { prisma };
