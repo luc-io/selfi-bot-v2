@@ -2,6 +2,10 @@ import { Context } from '../../types';
 import { starPacks } from '../../stars';
 
 export async function handleStarsCommand(ctx: Context) {
+  if (!ctx.from) {
+    return ctx.reply('Could not identify user');
+  }
+
   const user = await ctx.db.user.findUnique({
     where: { telegramId: ctx.from.id.toString() }
   });
