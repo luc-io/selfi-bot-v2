@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { logger } from './logger.js';
 
 const prisma = new PrismaClient();
@@ -15,7 +15,7 @@ export async function createPayment(data: PaymentCreateInput) {
 
   try {
     // Add stars and record transaction in one transaction
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Add stars to user balance
       await tx.user.update({
         where: { id: userId },
