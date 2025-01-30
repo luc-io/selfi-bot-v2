@@ -1,7 +1,7 @@
 import { Composer } from 'grammy';
-import { BotContext } from '../../types/bot';
-import { GenerationService } from '../../services/generation';
-import { logger } from '../../lib/logger';
+import { BotContext } from '../../types/bot.js';
+import { GenerationService } from '../../services/generation.js';
+import { logger } from '../../lib/logger.js';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
