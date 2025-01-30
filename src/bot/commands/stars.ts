@@ -1,91 +1,95 @@
-import { Context } from 'grammy';
-import { InlineKeyboard } from 'grammy';
+import { Composer } from 'grammy';
+import { BotContext } from '../../types/bot';
 import { logger } from '../../lib/logger';
-import { STAR_PRODUCTS, createStarInvoice } from '../../lib/payments';
-import { getOrCreateUser } from '../../lib/user';
+import { createPayment } from '../../lib/payments';
 
-// Command handler for /stars
-export async function starsHandler(ctx: Context) {
+const composer = new Composer<BotContext>();
+
+// Show available star packs
+composer.command('stars', async (ctx) => {
   try {
-    if (!ctx.from?.id) {
-      await ctx.reply('Could not identify user');
-      return;
-    }
+    const starPacks = [
+      { stars: 5, price: 99, label: '5 ⭐' },
+      { stars: 10, price: 149, label: '10 ⭐' },
+      { stars: 20, price: 249, label: '20 ⭐' },
+      { stars: 50, price: 499, label: '50 ⭐' },
+    ];
 
-    // Get user
-    const user = await getOrCreateUser(ctx.from.id.toString(), ctx.from.username);
+    const buttons = starPacks.map((pack) => [
+      {
+        text: `${pack.label} - $${(pack.price / 100).toFixed(2)}`,
+        callback_data: `buy_stars:${pack.stars}:${pack.price}`,
+      },
+    ]);
 
-    // Create keyboard with product buttons
-    const keyboard = new InlineKeyboard();
-    STAR_PRODUCTS.forEach((product) => {
-      keyboard.add({
-        text: product.description,
-        callback_data: `buy_stars:${product.id}`
-      });
+    await ctx.reply('💫 Buy Stars\n\nStars are used for generating images. Each generation costs 1 star.', {
+      reply_markup: {
+        inline_keyboard: buttons,
+      },
     });
-    keyboard.row();
-    keyboard.add({
-      text: '💫 Check Balance',
-      callback_data: 'check_stars'
-    });
-
-    // Send message with keyboard
-    await ctx.reply(
-      `🌟 Get more stars to generate images and train models!\n\n` +
-      `Current balance: ${user.stars} ⭐\n\n` +
-      `Select a package to continue:`,
-      { reply_markup: keyboard }
-    );
   } catch (error) {
-    logger.error('Error in stars command:', error);
-    await ctx.reply('Sorry, something went wrong. Please try again.');
+    logger.error({ error }, 'Failed to show star packs');
   }
-}
+});
 
-// Handle buy stars callback
-export async function handleBuyStarsCallback(ctx: Context) {
+// Handle star pack selection
+composer.callbackQuery(/buy_stars:(\d+):(\d+)/, async (ctx) => {
   try {
-    const callbackData = ctx.callbackQuery?.data;
-    if (!callbackData?.startsWith('buy_stars:')) return;
+    const [stars, price] = ctx.match.slice(1).map(Number);
+    const dollarsAmount = price / 100;
 
-    const productId = callbackData.replace('buy_stars:', '');
-    const invoice = createStarInvoice(productId);
+    const invoice = {
+      title: `${stars} Stars Package`,
+      description: `Buy ${stars} stars for generating images with Selfi`,
+      payload: `stars_${stars}_${ctx.from.id}`,
+      currency: 'USD',
+      prices: [{ label: `${stars} Stars`, amount: price }],
+    };
+
+    await ctx.replyWithInvoice(
+      invoice.title,
+      invoice.description,
+      invoice.payload,
+      invoice.currency,
+      invoice.prices
+    );
 
     await ctx.answerCallbackQuery();
-    await ctx.replyWithInvoice(invoice);
   } catch (error) {
-    logger.error('Error in buy stars callback:', error);
-    await ctx.answerCallbackQuery({
-      text: 'Sorry, something went wrong. Please try again.',
-      show_alert: true
-    });
+    logger.error({ error }, 'Failed to create invoice');
+    await ctx.answerCallbackQuery('Failed to create invoice');
   }
-}
+});
 
-// Handle check stars callback
-export async function handleCheckStarsCallback(ctx: Context) {
+// Handle successful payment
+composer.on('pre_checkout_query', async (ctx) => {
   try {
-    if (!ctx.from?.id) {
-      await ctx.answerCallbackQuery({
-        text: 'Could not identify user',
-        show_alert: true
-      });
-      return;
-    }
-
-    // Get user
-    const user = await getOrCreateUser(ctx.from.id.toString(), ctx.from.username);
-
-    // Show balance
-    await ctx.answerCallbackQuery({
-      text: `Current balance: ${user.stars} ⭐\nTotal spent: ${user.totalSpentStars} ⭐`,
-      show_alert: true
-    });
+    await ctx.answerPreCheckoutQuery(true);
   } catch (error) {
-    logger.error('Error in check stars callback:', error);
-    await ctx.answerCallbackQuery({
-      text: 'Sorry, something went wrong. Please try again.',
-      show_alert: true
-    });
+    logger.error({ error }, 'Failed to answer pre checkout query');
+    await ctx.answerPreCheckoutQuery(false, 'Payment failed');
   }
-}
+});
+
+composer.on('successful_payment', async (ctx) => {
+  try {
+    const payment = ctx.message?.successful_payment;
+    if (!payment) return;
+
+    const [_, stars, userId] = payment.invoice_payload.split('_');
+    const amount = payment.total_amount;
+
+    await createPayment({
+      userId,
+      amount,
+      stars: Number(stars),
+      telegramPaymentChargeId: payment.provider_payment_charge_id,
+    });
+
+    await ctx.reply(`✨ Thank you! ${stars} stars have been added to your balance.`);
+  } catch (error) {
+    logger.error({ error }, 'Failed to process successful payment');
+  }
+});
+
+export default composer;
