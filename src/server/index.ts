@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import fastifyCors from '@fastify/cors';
+import { PrismaClient } from '@prisma/client';
 import { config } from '../config';
 import { logger } from '../lib/logger';
 import generationRoutes from './routes/generation';
@@ -8,6 +9,8 @@ import generationRoutes from './routes/generation';
 const server = Fastify({
   logger,
 });
+
+const prisma = new PrismaClient();
 
 // Register plugins
 server.register(fastifyCors, {
@@ -23,7 +26,16 @@ server.addHook('preHandler', async (request, reply) => {
     return reply.status(401).send({ error: 'Unauthorized' });
   }
 
-  request.user = { id: userId.toString() };
+  // Get full user from database
+  const user = await prisma.user.findUnique({
+    where: { id: userId.toString() }
+  });
+
+  if (!user) {
+    return reply.status(401).send({ error: 'User not found' });
+  }
+
+  request.user = user;
 });
 
 // Register routes
