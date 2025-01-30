@@ -1,9 +1,9 @@
 import Fastify from 'fastify';
 import fastifyCors from '@fastify/cors';
 import { PrismaClient } from '@prisma/client';
-import { config } from '../config';
-import { logger } from '../lib/logger';
-import generationRoutes from './routes/generation';
+import { config } from '../config.js';
+import { logger } from '../lib/logger.js';
+import generationRoutes from './routes/generation.js';
 
 // Create fastify instance
 const server = Fastify({
