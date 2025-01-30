@@ -14,8 +14,15 @@ interface FalQueueResponse {
 }
 
 interface FalGenerationResponse {
-  images: string[];
+  images: Array<{
+    url: string;
+    content_type: string;
+    width?: number;
+    height?: number;
+  }>;
   seed: number;
+  has_nsfw_concepts: boolean[];
+  prompt: string;
 }
 
 const MAX_RETRIES = 3;
@@ -48,8 +55,8 @@ export class FalService {
         logger.warn({ response }, 'Invalid response format - images array empty');
         return false;
       }
-      if (typeof response.images[0] !== 'string') {
-        logger.warn({ response }, 'Invalid response format - first image not a string');
+      if (!response.images[0].url || typeof response.images[0].url !== 'string') {
+        logger.warn({ response }, 'Invalid response format - image URL missing or invalid');
         return false;
       }
       return true;
@@ -57,18 +64,6 @@ export class FalService {
       logger.error({ error, response }, 'Error validating response');
       return false;
     }
-  }
-
-  private validateQueueResponse(response: any): response is FalQueueResponse {
-    if (!response || typeof response !== 'object') return false;
-    if (typeof response.status !== 'string') return false;
-    if (typeof response.request_id !== 'string') return false;
-    if (typeof response.response_url !== 'string') return false;
-    if (typeof response.status_url !== 'string') return false;
-    if (typeof response.cancel_url !== 'string') return false;
-    if (!Array.isArray(response.logs)) return false;
-    if (typeof response.metrics !== 'object') return false;
-    return true;
   }
 
   public async generateImage(prompt: string, negativePrompt?: string): Promise<string> {
@@ -84,13 +79,15 @@ export class FalService {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            prompt,
-            negative_prompt: negativePrompt,
-            image_size: "512x512",
-            steps: 20,
-            seed: Math.floor(Math.random() * 1000000),
-            scheduler: "dpm++",
-            num_images: 1
+            input: {
+              prompt,
+              negative_prompt: negativePrompt,
+              image_size: "512x512",
+              num_inference_steps: 28,
+              guidance_scale: 3.5,
+              seed: Math.floor(Math.random() * 1000000),
+              num_images: 1
+            }
           }),
         });
 
@@ -99,11 +96,7 @@ export class FalService {
           throw new FalError(`Queue request failed: ${error}`);
         }
 
-        const rawQueueData = await queueResponse.json();
-        if (!this.validateQueueResponse(rawQueueData)) {
-          throw new FalError('Invalid queue response format');
-        }
-        const queueData = rawQueueData;
+        const queueData = await queueResponse.json() as FalQueueResponse;
         logger.info({ queue: queueData }, 'Generation queue update');
 
         // Poll for completion
@@ -120,11 +113,7 @@ export class FalService {
             throw new FalError(`Status check failed: ${error}`);
           }
 
-          const rawStatusData = await statusResponse.json();
-          if (!this.validateQueueResponse(rawStatusData)) {
-            throw new FalError('Invalid status response format');
-          }
-          const statusData = rawStatusData;
+          const statusData = await statusResponse.json() as FalQueueResponse;
           logger.info({ queue: statusData }, 'Generation queue update');
 
           if (statusData.status === 'COMPLETED') {
@@ -148,7 +137,7 @@ export class FalService {
             }
 
             logger.info('Generation completed successfully');
-            return result.images[0];
+            return result.images[0].url;
           }
 
           if (statusData.status === 'FAILED') {
