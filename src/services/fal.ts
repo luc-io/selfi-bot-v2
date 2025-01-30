@@ -47,6 +47,28 @@ export class FalService {
     return true;
   }
 
+  private parseQueueResponse(data: any): FalQueueResponse {
+    if (!data || typeof data !== 'object') {
+      throw new FalError('Invalid queue response format');
+    }
+
+    const requiredFields = [
+      'status',
+      'request_id',
+      'response_url',
+      'status_url',
+      'cancel_url'
+    ];
+
+    for (const field of requiredFields) {
+      if (!(field in data)) {
+        throw new FalError(`Missing required field in queue response: ${field}`);
+      }
+    }
+
+    return data as FalQueueResponse;
+  }
+
   public async generateImage(prompt: string, negativePrompt?: string): Promise<string> {
     let retries = 0;
     
@@ -75,7 +97,7 @@ export class FalService {
           throw new FalError(`Queue request failed: ${error}`);
         }
 
-        const queueData: FalQueueResponse = await queueResponse.json();
+        const queueData = this.parseQueueResponse(await queueResponse.json());
         logger.info({ queue: queueData }, 'Generation queue update');
 
         // Poll for completion
@@ -92,7 +114,7 @@ export class FalService {
             throw new FalError(`Status check failed: ${error}`);
           }
 
-          const statusData: FalQueueResponse = await statusResponse.json();
+          const statusData = this.parseQueueResponse(await statusResponse.json());
           logger.info({ queue: statusData }, 'Generation queue update');
 
           if (statusData.status === 'COMPLETED') {
