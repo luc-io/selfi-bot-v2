@@ -3,11 +3,8 @@ import { PrismaClient } from '@prisma/client';
 import { config } from '../config';
 import { logger } from '../lib/logger';
 
-const falClient = new fal({
-  credentials: {
-    key: config.FAL_KEY,
-  },
-});
+// Initialize FAL client
+fal.config({ credentials: { key: config.FAL_KEY } });
 
 const prisma = new PrismaClient();
 
@@ -19,6 +16,8 @@ interface GenerationOptions {
   seed?: number;
 }
 
+const DEFAULT_BASE_MODEL_ID = 'flux-default';
+
 export class GenerationService {
   static async generate(userId: string, options: GenerationOptions) {
     const { prompt, negativePrompt, loraPath, loraScale = 0.8, seed } = options;
@@ -28,7 +27,7 @@ export class GenerationService {
     let error: string | null = null;
 
     try {
-      const result = await falClient.subscribe('fal-ai/flux-party', {
+      const result = await fal.subscribe('fal-ai/flux-party', {
         input: {
           prompt,
           negative_prompt: negativePrompt,
@@ -53,6 +52,7 @@ export class GenerationService {
       await prisma.generation.create({
         data: {
           userId,
+          baseModelId: DEFAULT_BASE_MODEL_ID,
           prompt,
           negativePrompt,
           imageUrl,
