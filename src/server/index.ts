@@ -1,5 +1,5 @@
 import Fastify from 'fastify';
-import cors from '@fastify/cors';
+import fastifyCors from '@fastify/cors';
 import { config } from '../config';
 import { logger } from '../lib/logger';
 import generationRoutes from './routes/generation';
@@ -10,7 +10,7 @@ const server = Fastify({
 });
 
 // Register plugins
-server.register(cors, {
+server.register(fastifyCors, {
   origin: config.NODE_ENV === 'development' ? true : 'https://selfi-dev.blackiris.art',
   credentials: true
 });
