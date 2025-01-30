@@ -35,38 +35,28 @@ export class FalService {
   }
 
   private validateResponse(response: any): response is FalGenerationResponse {
-    if (!response || typeof response !== 'object') {
-      return false;
-    }
-    if (!Array.isArray(response.images) || !response.images.length) {
-      return false;
-    }
-    if (typeof response.seed !== 'number') {
-      return false;
-    }
-    return true;
-  }
-
-  private parseQueueResponse(data: any): FalQueueResponse {
-    if (!data || typeof data !== 'object') {
-      throw new FalError('Invalid queue response format');
-    }
-
-    const requiredFields = [
-      'status',
-      'request_id',
-      'response_url',
-      'status_url',
-      'cancel_url'
-    ];
-
-    for (const field of requiredFields) {
-      if (!(field in data)) {
-        throw new FalError(`Missing required field in queue response: ${field}`);
+    try {
+      if (!response || typeof response !== 'object') {
+        logger.warn({ response }, 'Invalid response format - not an object');
+        return false;
       }
+      if (!Array.isArray(response.images)) {
+        logger.warn({ response }, 'Invalid response format - images not an array');
+        return false;
+      }
+      if (!response.images.length) {
+        logger.warn({ response }, 'Invalid response format - images array empty');
+        return false;
+      }
+      if (typeof response.images[0] !== 'string') {
+        logger.warn({ response }, 'Invalid response format - first image not a string');
+        return false;
+      }
+      return true;
+    } catch (error) {
+      logger.error({ error, response }, 'Error validating response');
+      return false;
     }
-
-    return data as FalQueueResponse;
   }
 
   public async generateImage(prompt: string, negativePrompt?: string): Promise<string> {
@@ -97,7 +87,7 @@ export class FalService {
           throw new FalError(`Queue request failed: ${error}`);
         }
 
-        const queueData = this.parseQueueResponse(await queueResponse.json());
+        const queueData = await queueResponse.json();
         logger.info({ queue: queueData }, 'Generation queue update');
 
         // Poll for completion
@@ -114,7 +104,7 @@ export class FalService {
             throw new FalError(`Status check failed: ${error}`);
           }
 
-          const statusData = this.parseQueueResponse(await statusResponse.json());
+          const statusData = await statusResponse.json();
           logger.info({ queue: statusData }, 'Generation queue update');
 
           if (statusData.status === 'COMPLETED') {
@@ -131,11 +121,13 @@ export class FalService {
             }
 
             const result = await resultResponse.json();
+            logger.info({ result }, 'Generation result received');
             
             if (!this.validateResponse(result)) {
               throw new FalError('Invalid response format from FAL API');
             }
 
+            logger.info('Generation completed successfully');
             return result.images[0];
           }
 
