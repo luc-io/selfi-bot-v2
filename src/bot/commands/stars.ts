@@ -17,7 +17,7 @@ composer.command('stars', async (ctx) => {
 
     const buttons = starPacks.map((pack) => [
       {
-        text: `${pack.label} - $${(pack.price / 100).toFixed(2)}`,
+        text: `${pack.label} - ${pack.price} XTR`,
         callback_data: `buy_stars:${pack.stars}:${pack.price}`,
       },
     ]);
@@ -42,13 +42,12 @@ composer.callbackQuery(/buy_stars:(\d+):(\d+)/, async (ctx) => {
 
     const stars = Number(ctx.match[1]);
     const price = Number(ctx.match[2]);
-    const dollarsAmount = price / 100;
 
     const invoice = {
       title: `${stars} Stars Package`,
       description: `Buy ${stars} stars for generating images with Selfi`,
       payload: `stars_${stars}_${ctx.from?.id}`,
-      currency: 'USD',
+      currency: 'XTR',
       prices: [{ label: `${stars} Stars`, amount: price }],
     };
 
