@@ -1,5 +1,3 @@
-import { PaymentCurrency } from '@prisma/client';
-
 export const starPacks = [
   { stars: 5, price: 5, label: '5 ⭐' },
   { stars: 10, price: 10, label: '10 ⭐' },
@@ -12,6 +10,6 @@ export const getStarPackLabel = (stars: number): string => {
   return pack ? pack.label : `${stars} ⭐`;
 };
 
-export const formatPrice = (amount: number, currency: PaymentCurrency = PaymentCurrency.XTR): string => {
+export const formatPrice = (amount: number, currency: string = 'XTR'): string => {
   return `${amount} ${currency}`;
 };
