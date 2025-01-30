@@ -28,10 +28,9 @@ export default async function generationRoutes(server: FastifyInstance) {
       if (loraId) {
         lora = await prisma.loraModel.findUnique({
           where: { id: loraId },
-          select: {
-            weightsUrl: true,
-            baseModelId: true,
-          },
+          include: {
+            baseModel: true,
+          }
         });
 
         if (!lora) {
@@ -42,7 +41,7 @@ export default async function generationRoutes(server: FastifyInstance) {
       const result = await GenerationService.generate(request.user.id, {
         prompt,
         negativePrompt,
-        loraPath: lora?.weightsUrl,
+        loraPath: lora?.weightsUrl ?? undefined,
         seed,
       });
 
