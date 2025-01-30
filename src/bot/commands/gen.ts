@@ -2,7 +2,9 @@ import { Composer } from 'grammy';
 import { BotContext } from '../../types/bot';
 import { GenerationService } from '../../services/generation';
 import { logger } from '../../lib/logger';
+import { PrismaClient } from '@prisma/client';
 
+const prisma = new PrismaClient();
 const composer = new Composer<BotContext>();
 
 composer.command('gen', async (ctx) => {
@@ -12,9 +14,17 @@ composer.command('gen', async (ctx) => {
     return;
   }
 
+  if (!ctx.from?.id) {
+    await ctx.reply('Could not identify user');
+    return;
+  }
+
   try {
     // Check user stars balance
-    const user = await ctx.user;
+    const user = await prisma.user.findUnique({
+      where: { telegramId: ctx.from.id.toString() }
+    });
+    
     if (!user?.stars || user.stars < 1) {
       await ctx.reply('You need at least 1 star to generate an image. Use /stars to buy more.');
       return;
@@ -22,7 +32,7 @@ composer.command('gen', async (ctx) => {
 
     await ctx.reply('🎨 Generating your image...');
 
-    const { imageUrl } = await GenerationService.generate(ctx.from.id.toString(), {
+    const { imageUrl } = await GenerationService.generate(user.id, {
       prompt,
     });
 
