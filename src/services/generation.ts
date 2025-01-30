@@ -4,7 +4,7 @@ import { config } from '../config';
 import { logger } from '../lib/logger';
 
 // Initialize FAL client
-fal.config({ credentials: { key: config.FAL_KEY } });
+fal.config({ credentials: config.FAL_KEY });
 
 const prisma = new PrismaClient();
 
@@ -13,6 +13,13 @@ interface GenerationOptions {
   negativePrompt?: string;
   loraPath?: string;
   loraScale?: number;
+  seed?: number;
+}
+
+interface FalResponse {
+  image: {
+    url: string;
+  };
   seed?: number;
 }
 
@@ -27,7 +34,7 @@ export class GenerationService {
     let error: string | null = null;
 
     try {
-      const result = await fal.subscribe('fal-ai/flux-party', {
+      const result = await fal.subscribe<FalResponse>('fal-ai/flux-party', {
         input: {
           prompt,
           negative_prompt: negativePrompt,
@@ -42,7 +49,7 @@ export class GenerationService {
         },
       });
 
-      if (!result.image?.url) {
+      if (!result?.image?.url) {
         throw new Error('No image URL in response');
       }
 
