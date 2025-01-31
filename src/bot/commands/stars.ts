@@ -52,7 +52,7 @@ composer.callbackQuery(/buy_stars:(\d+):(\d+)/, async (ctx) => {
     const currency = 'XTR';
     const prices = [{
       label: `${stars} Stars`,
-      amount: price * 100 // Convert to smallest currency unit
+      amount: price // XTR doesn't need conversion like other currencies
     }];
 
     await ctx.replyWithInvoice(
@@ -120,7 +120,7 @@ composer.on(':successful_payment', async (ctx) => {
     if (!payment) return;
 
     const [_, stars, userId] = payment.invoice_payload.split('_');
-    const amount = payment.total_amount / 100; // Convert from smallest currency unit
+    const amount = payment.total_amount; // No need to convert XTR amount
 
     await createPayment({
       userId,
