@@ -13,16 +13,21 @@ interface FalQueueResponse {
   };
 }
 
+interface FalImage {
+  url: string;
+  width?: number;
+  height?: number;
+  content_type?: string;
+}
+
 interface FalGenerationResponse {
-  images: Array<{
-    url: string;
-    content_type: string;
-    width?: number;
-    height?: number;
-  }>;
-  seed: number;
-  has_nsfw_concepts: boolean[];
-  prompt: string;
+  seed?: number;
+  images: FalImage[];
+  prompt?: string;
+  timings?: {
+    inference?: number;
+  };
+  has_nsfw_concepts?: boolean[];
 }
 
 const MAX_RETRIES = 3;
@@ -50,96 +55,39 @@ export class FalService {
         return false;
       }
 
-      // Log the response structure
-      logger.info({
-        hasImages: 'images' in response,
-        hasImageObj: 'image' in response,
-        hasDirectUrl: 'url' in response,
-        responseKeys: Object.keys(response)
-      }, 'Response structure');
-
-      // Check for direct URL
-      if (response.url) {
-        logger.info({ url: response.url }, 'Found direct URL in response');
-        return true;
-      }
-
       // Check for images array
-      if (Array.isArray(response.images)) {
-        logger.info({ images: response.images }, 'Found images array in response');
-        const firstImage = response.images[0];
-        
-        if (typeof firstImage === 'string') {
-          logger.info({ imageUrl: firstImage }, 'Found string URL in images array');
-          return true;
-        }
-        
-        if (firstImage && typeof firstImage === 'object' && typeof firstImage.url === 'string') {
-          logger.info({ imageUrl: firstImage.url }, 'Found object with URL in images array');
-          return true;
-        }
+      if (!Array.isArray(response.images)) {
+        logger.warn('Response missing images array');
+        return false;
       }
 
-      // Check for image object
-      if (response.image && typeof response.image === 'object') {
-        logger.info({ image: response.image }, 'Found image object in response');
-        if (typeof response.image.url === 'string') {
-          logger.info({ imageUrl: response.image.url }, 'Found URL in image object');
-          return true;
-        }
+      if (response.images.length === 0) {
+        logger.warn('Response images array is empty');
+        return false;
       }
 
-      // Check for result object (FAL specific format)
-      if (response.result && typeof response.result === 'object') {
-        logger.info({ result: response.result }, 'Found result object in response');
-        if (typeof response.result.image === 'string') {
-          logger.info({ imageUrl: response.result.image }, 'Found image in result object');
-          return true;
-        }
+      const firstImage = response.images[0];
+      if (!firstImage || typeof firstImage !== 'object' || !firstImage.url) {
+        logger.warn('First image missing or invalid');
+        return false;
       }
 
-      // Check for FAL queue format
-      if (typeof response.response === 'string') {
-        logger.info({ response: response.response }, 'Found response string (potential URL)');
-        return true;
-      }
-
-      logger.warn('No valid image format found in response');
-      return false;
+      logger.info({ 
+        first_image: firstImage,
+        seed: response.seed,
+        has_nsfw: response.has_nsfw_concepts 
+      }, 'Valid response found');
+      
+      return true;
     } catch (error) {
       logger.error({ error }, 'Error validating response');
       return false;
     }
   }
 
-  private getImageUrlFromResponse(response: any): string {
-    if (response.url) {
-      return response.url;
-    }
-
-    if (Array.isArray(response.images)) {
-      const firstImage = response.images[0];
-      if (typeof firstImage === 'string') {
-        return firstImage;
-      }
-      if (firstImage && typeof firstImage === 'object' && firstImage.url) {
-        return firstImage.url;
-      }
-    }
-
-    if (response.image && response.image.url) {
-      return response.image.url;
-    }
-
-    if (response.result && response.result.image) {
-      return response.result.image;
-    }
-
-    if (response.response) {
-      return response.response;
-    }
-
-    throw new FalError('Could not find image URL in response');
+  private getImageUrlFromResponse(response: FalGenerationResponse): string {
+    const firstImage = response.images[0];
+    return firstImage.url;
   }
 
   public async generateImage(prompt: string, negativePrompt?: string): Promise<string> {
@@ -175,7 +123,7 @@ export class FalService {
         }
 
         const queueData = await queueResponse.json() as FalQueueResponse;
-        logger.info({ queue: queueData }, 'Generation queue update');
+        logger.info({ queue: queueData }, 'Queue initialized');
 
         // Poll for completion
         let attempts = 0;
@@ -192,10 +140,10 @@ export class FalService {
           }
 
           const statusData = await statusResponse.json() as FalQueueResponse;
-          logger.info({ queue: statusData }, 'Generation queue status update');
+          logger.info({ status: statusData.status }, 'Queue status update');
 
           if (statusData.status === 'COMPLETED') {
-            logger.info('Status COMPLETED, fetching result');
+            logger.info('Generation completed, fetching result');
             
             // Fetch the result
             const resultResponse = await fetch(queueData.response_url, {
@@ -211,18 +159,15 @@ export class FalService {
             }
 
             const result = await resultResponse.json();
-            logger.info({ result }, 'Generation result received');
-
-            logger.info('Validating response format');
+            logger.info('Result received, validating');
+            
             if (!this.validateResponse(result)) {
               logger.error({ result }, 'Invalid response format');
               throw new FalError('Invalid response format from FAL API');
             }
 
-            logger.info('Response format valid, extracting URL');
             const imageUrl = this.getImageUrlFromResponse(result);
             logger.info({ imageUrl }, 'Successfully extracted image URL');
-            
             return imageUrl;
           }
 
@@ -230,7 +175,7 @@ export class FalService {
             throw new FalError('Generation failed: ' + (statusData.logs?.join(', ') || 'Unknown error'));
           }
 
-          await this.wait(2000); // Wait 2 seconds before next check
+          await this.wait(2000);
           attempts++;
         }
 
