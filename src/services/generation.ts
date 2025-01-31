@@ -100,36 +100,37 @@ export class GenerationService {
 
       const imageUrl = response.data.images[0].url;
 
-      // Now that we have the image, update the database in a transaction
-      const result = await prisma.$transaction([
-        // Create generation record
-        prisma.generation.create({
-          data: {
-            userId,
-            baseModelId: DEFAULT_BASE_MODEL_ID,
-            prompt,
-            negativePrompt,
-            imageUrl,
-            seed: seed ? BigInt(seed) : null,
-            starsUsed: 1,
-          },
-        }),
-        // Decrement user's stars
-        prisma.user.update({
-          where: { id: userId },
-          data: {
-            stars: { decrement: 1 }
+      // Now that we have the image, update the database
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: {
+          stars: { decrement: 1 },
+          generations: {
+            create: {
+              baseModelId: DEFAULT_BASE_MODEL_ID,
+              prompt,
+              negativePrompt,
+              imageUrl,
+              seed: seed ? BigInt(seed) : null,
+              starsUsed: 1,
+            }
           }
-        })
-      ], {
-        timeout: 10000 // 10 second timeout for the database operations
+        },
+        include: {
+          generations: {
+            orderBy: {
+              createdAt: 'desc'
+            },
+            take: 1
+          }
+        }
       });
 
       logger.info({ 
         imageUrl, 
         prompt, 
         timing: response.data.timings?.inference,
-        newStarsBalance: result[1].stars
+        newStarsBalance: updatedUser.stars
       }, 'Generation succeeded');
 
       return { imageUrl };
