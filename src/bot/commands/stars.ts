@@ -46,41 +46,25 @@ composer.callbackQuery(/buy_stars:(\d+):(\d+)/, async (ctx) => {
     // Create a unique start parameter
     const startParameter = `stars_${Date.now()}`;
 
-    const invoice = {
+    const prices = [{
+      label: `${stars} Stars`,
+      amount: price * 100 // Convert to smallest currency unit
+    }];
+
+    await ctx.replyWithInvoice({
       title: `${stars} Stars Package`,
       description: `Buy ${stars} stars for generating images with Selfi`,
       payload: `stars_${stars}_${ctx.from?.id}`,
       provider_token: '', // Empty for digital goods
       currency: 'XTR',
-      prices: [{ label: `${stars} Stars`, amount: price }],
+      prices,
       start_parameter: startParameter,
       need_name: false,
       need_phone_number: false,
       need_email: false,
       need_shipping_address: false,
-      is_flexible: false,
-      photo_url: undefined,
-      photo_size: undefined,
-      photo_width: undefined,
-      photo_height: undefined,
-    };
-
-    await ctx.replyWithInvoice(
-      invoice.title,
-      invoice.description,
-      invoice.payload,
-      invoice.provider_token,
-      invoice.currency,
-      invoice.prices,
-      {
-        start_parameter: invoice.start_parameter,
-        need_name: invoice.need_name,
-        need_phone_number: invoice.need_phone_number,
-        need_email: invoice.need_email,
-        need_shipping_address: invoice.need_shipping_address,
-        is_flexible: invoice.is_flexible,
-      }
-    );
+      is_flexible: false
+    });
 
     await ctx.answerCallbackQuery();
   } catch (error) {
@@ -131,7 +115,7 @@ composer.on(':successful_payment', async (ctx) => {
     if (!payment) return;
 
     const [_, stars, userId] = payment.invoice_payload.split('_');
-    const amount = payment.total_amount;
+    const amount = payment.total_amount / 100; // Convert from smallest currency unit
 
     await createPayment({
       userId,
