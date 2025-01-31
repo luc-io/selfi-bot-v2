@@ -28,9 +28,12 @@ composer.command('start', async (ctx) => {
     });
 
     await ctx.reply(
-      `Welcome to Selfi! 🤖✨\n\nI can help you generate amazing images using AI. Each generation costs 1 star. ${
-        user.stars > 0 ? `\n\nYou have ${user.stars} ⭐` : ''
-      }\n\nCommands:\n/gen - Generate an image\n/stars - Get more stars`
+      `Generate amazing images using Flux AI. Each generation costs 1 star. Your balance is ${user.stars} ⭐\n\n` +
+      'Available commands:\n' +
+      '/gen - Generate an image\n' +
+      '/stars - Buy more stars\n' +
+      '/balance - Check your balance\n' +
+      '/help - Show all commands'
     );
   } catch (error) {
     logger.error({ error }, 'Failed to start bot');
