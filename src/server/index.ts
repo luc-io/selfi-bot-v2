@@ -1,22 +1,19 @@
 import fastify from 'fastify';
 import cors from '@fastify/cors';
-import { config } from '../config';
-import { logger } from '../lib/logger';
+import { config } from '../config.js';
+import { logger } from '../lib/logger.js';
 
 export async function setupServer() {
-  // Create server
   const server = fastify({
     logger,
   });
 
-  // Setup CORS
   await server.register(cors, {
     origin: config.MINIAPP_URL,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'x-user-id'],
   });
 
-  // Start server
   try {
     const port = parseInt(config.PORT);
     await server.listen({ port });
