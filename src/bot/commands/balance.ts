@@ -1,59 +1,32 @@
-import { Context } from 'grammy';
-import { prisma } from '../../lib/prisma';
-import { logger } from '../../lib/logger';
+import { Composer } from 'grammy';
+import { BotContext } from '../../types/bot.js';
+import { logger } from '../../lib/logger.js';
+import { PrismaClient } from '@prisma/client';
 
-export async function balanceHandler(ctx: Context) {
+const prisma = new PrismaClient();
+const composer = new Composer<BotContext>();
+
+composer.command('balance', async (ctx) => {
   try {
-    const telegramId = ctx.from?.id.toString();
-
-    if (!telegramId) {
-      await ctx.reply('Error: Could not identify user');
+    if (!ctx.from?.id) {
+      await ctx.reply('Could not identify user');
       return;
     }
 
-    // Get user
     const user = await prisma.user.findUnique({
-      where: { telegramId },
-      select: {
-        stars: true,
-        totalSpentStars: true,
-        totalBoughtStars: true,
-        _count: {
-          select: {
-            generations: true,
-            models: true
-          }
-        }
-      }
+      where: { telegramId: ctx.from.id.toString() }
     });
-
+    
     if (!user) {
-      await ctx.reply('Please start the bot with /start first');
+      await ctx.reply('You need to use /start first to create your account.');
       return;
     }
 
-    // Format message
-    const message = [
-      `💫 Your Stars Balance`,
-      ``,
-      `⭐ Current balance: ${user.stars} stars`,
-      `🔄 Total spent: ${user.totalSpentStars} stars`,
-      `💰 Total purchased: ${user.totalBoughtStars} stars`,
-      ``,
-      `📊 Statistics`,
-      `🎨 Images generated: ${user._count.generations}`,
-      `🎯 Models trained: ${user._count.models}`,
-      ``,
-      `Get more stars:`,
-      `• Generate images (2⭐ each)`,
-      `• Train models (150⭐ each)`,
-      `• Buy stars using /stars command`
-    ].join('\n');
-
-    await ctx.reply(message);
-
+    await ctx.reply(`⭐ Your balance: ${user.stars} stars\n\nUse /stars to buy more stars for generating images!`);
   } catch (error) {
-    logger.error('Error in balance command:', error);
-    await ctx.reply('Sorry, something went wrong. Please try again later.');
+    logger.error({ error }, 'Failed to check balance');
+    await ctx.reply('Sorry, something went wrong while checking your balance.');
   }
-}
+});
+
+export default composer;
