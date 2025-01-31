@@ -35,7 +35,8 @@ export async function createPayment(data: PaymentData): Promise<void> {
         totalBoughtStars: { increment: data.stars },
       },
     });
-  } catch (error) {
-    throw new Error(`Payment creation failed: ${error.message}`);
+  } catch (err) {
+    const error = err as Error;
+    throw new Error(`Payment creation failed: ${error?.message || 'Unknown error'}`);
   }
 }
