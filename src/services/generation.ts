@@ -53,87 +53,111 @@ export class GenerationService {
     const { prompt, negativePrompt, loraPath, loraScale = 0.8, seed } = options;
 
     try {
-      // First check user's stars balance
+      // First check user's stars balance and get telegramId
       const user = await prisma.user.findUnique({
-        where: { id: userId }
+        where: { id: userId },
+        select: {
+          id: true,
+          stars: true,
+          telegramId: true
+        }
       });
 
       if (!user || user.stars < 1) {
         throw new Error('Insufficient stars balance');
       }
 
-      // Generate image
-      const falResult = await fal.subscribe('fal-ai/flux-lora', {
-        input: {
-          prompt,
-          negative_prompt: negativePrompt,
-          lora_path: loraPath,
-          lora_scale: loraScale,
-          seed,
-          image_size: DEFAULT_IMAGE_SIZE,
-          num_inference_steps: 28,
-          guidance_scale: 3.5,
-        } as FalRequest,
-        pollInterval: 1000,
-        logs: true,
-        onQueueUpdate: (update: { status: string; position?: number }) => {
-          logger.info({ 
-            status: update.status,
-            position: update.position,
+      let generatedImageUrl: string | null = null;
+      let falRequestId: string | null = null;
+
+      try {
+        // Generate image
+        const falResult = await fal.subscribe('fal-ai/flux-lora', {
+          input: {
             prompt,
-            userId
-          }, 'Generation queue update');
-        },
-      });
+            negative_prompt: negativePrompt,
+            lora_path: loraPath,
+            lora_scale: loraScale,
+            seed,
+            image_size: DEFAULT_IMAGE_SIZE,
+            num_inference_steps: 28,
+            guidance_scale: 3.5,
+          } as FalRequest,
+          pollInterval: 1000,
+          logs: true,
+          onQueueUpdate: (update: { status: string; position?: number }) => {
+            logger.info({ 
+              status: update.status,
+              position: update.position,
+              prompt,
+              userId: user.telegramId
+            }, 'Generation queue update');
+          },
+        });
 
-      logger.info({ 
-        falResponse: falResult,
-        prompt,
-        userId 
-      }, 'FAL API Response');
+        // Log the full FAL response
+        logger.info({ 
+          falResponse: falResult,
+          prompt,
+          userId: user.telegramId 
+        }, 'FAL API Response');
 
-      const response = falResult as unknown as FalResponse;
-      
-      if (!response?.data?.images?.length) {
-        throw new Error('No images generated in response');
+        const response = falResult as unknown as FalResponse;
+        falRequestId = response.requestId;
+        
+        if (!response?.data?.images?.length) {
+          throw new Error('No images in response');
+        }
+
+        generatedImageUrl = response.data.images[0].url;
+
+        // Update database only if we have a valid image
+        if (generatedImageUrl) {
+          await prisma.user.update({
+            where: { id: userId },
+            data: {
+              stars: { decrement: 1 },
+              generations: {
+                create: {
+                  baseModelId: DEFAULT_BASE_MODEL_ID,
+                  prompt,
+                  negativePrompt,
+                  imageUrl: generatedImageUrl,
+                  seed: seed ? BigInt(seed) : null,
+                  starsUsed: 1,
+                  metadata: {
+                    falRequestId,
+                    inferenceTime: response.data.timings?.inference,
+                    hasNsfw: response.data.has_nsfw_concepts?.[0] || false
+                  }
+                }
+              }
+            }
+          });
+
+          logger.info({ 
+            imageUrl: generatedImageUrl,
+            prompt,
+            falRequestId,
+            timing: response.data.timings?.inference,
+            userId: user.telegramId
+          }, 'Generation succeeded');
+
+          return { imageUrl: generatedImageUrl };
+        } else {
+          throw new Error('Failed to get image URL from response');
+        }
+
+      } catch (falError: any) {
+        logger.error({ 
+          error: falError.message,
+          prompt,
+          falRequestId,
+          userId: user.telegramId
+        }, 'FAL API Error');
+        throw new Error(`Image generation failed: ${falError.message}`);
       }
 
-      const imageUrl = response.data.images[0].url;
-
-      // Now that we have the image, update the database
-      const updatedUser = await prisma.user.update({
-        where: { id: userId },
-        data: {
-          stars: { decrement: 1 },
-          generations: {
-            create: {
-              baseModelId: DEFAULT_BASE_MODEL_ID,
-              prompt,
-              negativePrompt,
-              imageUrl,
-              seed: seed ? BigInt(seed) : null,
-              starsUsed: 1,
-            }
-          }
-        },
-        include: {
-          generations: {
-            orderBy: {
-              createdAt: 'desc'
-            },
-            take: 1
-          }
-        }
-      });
-
-      logger.info({ 
-        imageUrl, 
-        prompt, 
-        timing: response.data.timings?.inference,
-        newStarsBalance: updatedUser.stars
-      }, 'Generation succeeded');
-
-      return { imageUrl };
     } catch (e: any) {
       const errorMessage = e.message || 'Unknown error';
       logger.error({ 
