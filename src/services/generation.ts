@@ -28,15 +28,18 @@ interface FalRequest {
 }
 
 interface FalResponse {
-  image: {
+  seed: number;
+  images: Array<{
     url: string;
-    width?: number;
-    height?: number;
+    width: number;
+    height: number;
     content_type: string;
-  };
-  seed?: number;
-  has_nsfw_concepts?: boolean[];
+  }>;
   prompt: string;
+  timings: {
+    inference: number;
+  };
+  has_nsfw_concepts: boolean[];
 }
 
 const DEFAULT_BASE_MODEL_ID = 'flux-default';
@@ -45,10 +48,6 @@ const DEFAULT_IMAGE_SIZE = 'landscape_4_3';
 export class GenerationService {
   static async generate(userId: string, options: GenerationOptions) {
     const { prompt, negativePrompt, loraPath, loraScale = 0.8, seed } = options;
-
-    // Start generation
-    let imageUrl = '';
-    let error: string | null = null;
 
     try {
       const result = await fal.subscribe('fal-ai/flux-lora', {
@@ -65,16 +64,23 @@ export class GenerationService {
         pollInterval: 1000,
         logs: true,
         onQueueUpdate: (update: { status: string; position?: number }) => {
-          logger.info({ queue: update }, 'Generation queue update');
+          logger.info({ 
+            status: update.status,
+            position: update.position,
+            prompt,
+            userId
+          }, 'Generation queue update');
         },
       });
 
       const response = result as unknown as FalResponse;
-      if (!response?.image?.url) {
-        throw new Error('No image URL in response');
+      
+      // Check if we have valid images array
+      if (!response?.images?.length) {
+        throw new Error('No images generated');
       }
 
-      imageUrl = response.image.url;
+      const imageUrl = response.images[0].url;
 
       // Save generation to database
       await prisma.generation.create({
@@ -89,11 +95,21 @@ export class GenerationService {
         },
       });
 
+      logger.info({ 
+        imageUrl, 
+        prompt, 
+        timing: response.timings?.inference 
+      }, 'Generation succeeded');
+
       return { imageUrl };
     } catch (e: any) {
-      error = e.message;
-      logger.error({ error: e }, 'Generation failed');
-      throw new Error('Generation failed: ' + error);
+      const errorMessage = e.message || 'Unknown error';
+      logger.error({ 
+        error: errorMessage,
+        prompt,
+        userId 
+      }, 'Generation failed');
+      throw new Error('Generation failed: ' + errorMessage);
     }
   }
 
