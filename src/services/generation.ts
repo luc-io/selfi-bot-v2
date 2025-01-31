@@ -73,6 +73,13 @@ export class GenerationService {
         },
       });
 
+      // Log the full response from FAL
+      logger.info({ 
+        falResponse: result,
+        prompt,
+        userId 
+      }, 'FAL API Response');
+
       const response = result as unknown as FalResponse;
       
       // Check if we have valid images array
