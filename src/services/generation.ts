@@ -28,18 +28,21 @@ interface FalRequest {
 }
 
 interface FalResponse {
-  seed: number;
-  images: Array<{
-    url: string;
-    width: number;
-    height: number;
-    content_type: string;
-  }>;
-  prompt: string;
-  timings: {
-    inference: number;
+  data: {
+    images: Array<{
+      url: string;
+      width: number;
+      height: number;
+      content_type: string;
+    }>;
+    prompt: string;
+    timings: {
+      inference: number;
+    };
+    seed: number;
+    has_nsfw_concepts: boolean[];
   };
-  has_nsfw_concepts: boolean[];
+  requestId: string;
 }
 
 const DEFAULT_BASE_MODEL_ID = 'flux-default';
@@ -83,11 +86,11 @@ export class GenerationService {
       const response = result as unknown as FalResponse;
       
       // Check if we have valid images array
-      if (!response?.images?.length) {
-        throw new Error('No images generated');
+      if (!response?.data?.images?.length) {
+        throw new Error('No images generated in response');
       }
 
-      const imageUrl = response.images[0].url;
+      const imageUrl = response.data.images[0].url;
 
       // Save generation to database
       await prisma.generation.create({
@@ -105,7 +108,7 @@ export class GenerationService {
       logger.info({ 
         imageUrl, 
         prompt, 
-        timing: response.timings?.inference 
+        timing: response.data.timings?.inference 
       }, 'Generation succeeded');
 
       return { imageUrl };
