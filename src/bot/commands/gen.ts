@@ -37,8 +37,13 @@ composer.command('gen', async (ctx) => {
     });
 
     await ctx.replyWithPhoto(imageUrl);
-  } catch (error) {
-    logger.error({ error }, 'Generation failed');
+  } catch (error: any) {
+    const errorMessage = error.message || 'Unknown error';
+    logger.error({ 
+      error: errorMessage,
+      prompt,
+      userId: ctx.from.id.toString()
+    }, 'Generation command failed');
     await ctx.reply('Sorry, something went wrong while generating your image.');
   }
 });
