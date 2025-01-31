@@ -53,57 +53,57 @@ export class GenerationService {
     const { prompt, negativePrompt, loraPath, loraScale = 0.8, seed } = options;
 
     try {
-      // Start database transaction
-      const result = await prisma.$transaction(async (tx) => {
-        // Get user and check stars balance
-        const user = await tx.user.findUnique({
-          where: { id: userId }
-        });
+      // First check user's stars balance
+      const user = await prisma.user.findUnique({
+        where: { id: userId }
+      });
 
-        if (!user || user.stars < 1) {
-          throw new Error('Insufficient stars balance');
-        }
+      if (!user || user.stars < 1) {
+        throw new Error('Insufficient stars balance');
+      }
 
-        // Generate image
-        const falResult = await fal.subscribe('fal-ai/flux-lora', {
-          input: {
-            prompt,
-            negative_prompt: negativePrompt,
-            lora_path: loraPath,
-            lora_scale: loraScale,
-            seed,
-            image_size: DEFAULT_IMAGE_SIZE,
-            num_inference_steps: 28,
-            guidance_scale: 3.5,
-          } as FalRequest,
-          pollInterval: 1000,
-          logs: true,
-          onQueueUpdate: (update: { status: string; position?: number }) => {
-            logger.info({ 
-              status: update.status,
-              position: update.position,
-              prompt,
-              userId
-            }, 'Generation queue update');
-          },
-        });
-
-        logger.info({ 
-          falResponse: falResult,
+      // Generate image
+      const falResult = await fal.subscribe('fal-ai/flux-lora', {
+        input: {
           prompt,
-          userId 
-        }, 'FAL API Response');
+          negative_prompt: negativePrompt,
+          lora_path: loraPath,
+          lora_scale: loraScale,
+          seed,
+          image_size: DEFAULT_IMAGE_SIZE,
+          num_inference_steps: 28,
+          guidance_scale: 3.5,
+        } as FalRequest,
+        pollInterval: 1000,
+        logs: true,
+        onQueueUpdate: (update: { status: string; position?: number }) => {
+          logger.info({ 
+            status: update.status,
+            position: update.position,
+            prompt,
+            userId
+          }, 'Generation queue update');
+        },
+      });
 
-        const response = falResult as unknown as FalResponse;
-        
-        if (!response?.data?.images?.length) {
-          throw new Error('No images generated in response');
-        }
+      logger.info({ 
+        falResponse: falResult,
+        prompt,
+        userId 
+      }, 'FAL API Response');
 
-        const imageUrl = response.data.images[0].url;
+      const response = falResult as unknown as FalResponse;
+      
+      if (!response?.data?.images?.length) {
+        throw new Error('No images generated in response');
+      }
 
+      const imageUrl = response.data.images[0].url;
+
+      // Now that we have the image, update the database in a transaction
+      const result = await prisma.$transaction([
         // Create generation record
-        await tx.generation.create({
+        prisma.generation.create({
           data: {
             userId,
             baseModelId: DEFAULT_BASE_MODEL_ID,
@@ -113,26 +113,26 @@ export class GenerationService {
             seed: seed ? BigInt(seed) : null,
             starsUsed: 1,
           },
-        });
-
+        }),
         // Decrement user's stars
-        await tx.user.update({
+        prisma.user.update({
           where: { id: userId },
           data: {
             stars: { decrement: 1 }
           }
-        });
-
-        logger.info({ 
-          imageUrl, 
-          prompt, 
-          timing: response.data.timings?.inference 
-        }, 'Generation succeeded');
-
-        return { imageUrl };
+        })
+      ], {
+        timeout: 10000 // 10 second timeout for the database operations
       });
 
-      return result;
+      logger.info({ 
+        imageUrl, 
+        prompt, 
+        timing: response.data.timings?.inference,
+        newStarsBalance: result[1].stars
+      }, 'Generation succeeded');
+
+      return { imageUrl };
     } catch (e: any) {
       const errorMessage = e.message || 'Unknown error';
       logger.error({ 
