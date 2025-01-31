@@ -46,25 +46,30 @@ composer.callbackQuery(/buy_stars:(\d+):(\d+)/, async (ctx) => {
     // Create a unique start parameter
     const startParameter = `stars_${Date.now()}`;
 
+    const title = `${stars} Stars Package`;
+    const description = `Buy ${stars} stars for generating images with Selfi`;
+    const payload = `stars_${stars}_${ctx.from?.id}`;
+    const currency = 'XTR';
     const prices = [{
       label: `${stars} Stars`,
       amount: price * 100 // Convert to smallest currency unit
     }];
 
-    await ctx.replyWithInvoice({
-      title: `${stars} Stars Package`,
-      description: `Buy ${stars} stars for generating images with Selfi`,
-      payload: `stars_${stars}_${ctx.from?.id}`,
-      provider_token: '', // Empty for digital goods
-      currency: 'XTR',
+    await ctx.replyWithInvoice(
+      title,
+      description,
+      payload,
+      currency,
       prices,
-      start_parameter: startParameter,
-      need_name: false,
-      need_phone_number: false,
-      need_email: false,
-      need_shipping_address: false,
-      is_flexible: false
-    });
+      {
+        start_parameter: startParameter,
+        need_name: false,
+        need_phone_number: false,
+        need_email: false,
+        need_shipping_address: false,
+        is_flexible: false
+      }
+    );
 
     await ctx.answerCallbackQuery();
   } catch (error) {
