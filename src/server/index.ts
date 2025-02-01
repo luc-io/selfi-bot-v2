@@ -9,6 +9,8 @@ export async function setupServer() {
     logger,
   });
 
+  logger.info('Setting up server...');
+
   // Register CORS
   await server.register(cors, {
     origin: config.MINIAPP_URL,
@@ -16,12 +18,33 @@ export async function setupServer() {
     allowedHeaders: ['Content-Type', 'x-telegram-init-data'],
   });
 
+  logger.info('CORS configured with origin:', config.MINIAPP_URL);
+
   // Register routes
-  await server.register(paramsRoutes, { prefix: '/' });
+  try {
+    await server.register(paramsRoutes, { prefix: '/' });
+    logger.info('Routes registered successfully');
+
+    // Log all registered routes
+    server.ready(() => {
+      logger.info('Registered routes:', {
+        routes: server.printRoutes()
+      });
+    });
+  } catch (error) {
+    logger.error('Failed to register routes:', error);
+    throw error;
+  }
 
   // Add error handler
   server.setErrorHandler((error, request, reply) => {
-    logger.error({ error, path: request.url, method: request.method }, 'Server error');
+    logger.error({ 
+      error, 
+      path: request.url, 
+      method: request.method,
+      body: request.body
+    }, 'Server error');
+    
     reply.status(500).send({
       success: false,
       message: 'Internal server error',
@@ -30,8 +53,10 @@ export async function setupServer() {
 
   try {
     const port = parseInt(config.PORT);
-    await server.listen({ port, host: '0.0.0.0' });
-    logger.info({ port }, 'Server started');
+    const host = '0.0.0.0';
+    
+    await server.listen({ port, host });
+    logger.info({ port, host }, 'Server started');
   } catch (err) {
     logger.error({ error: err }, 'Failed to start server');
     process.exit(1);
