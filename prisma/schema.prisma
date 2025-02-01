@@ -9,37 +9,24 @@ datasource db {
 }
 
 model User {
-  id                String         @id
-  telegramId        String         @unique
+  id                String       @id
+  telegramId        BigInt      @unique  // Changed from String to BigInt
   username          String?
-  stars             Int            @default(0)
-  totalSpentStars   Int            @default(0)
-  totalBoughtStars  Int            @default(0)
+  stars             Int          @default(0)
+  totalSpentStars   Int          @default(0)
+  totalBoughtStars  Int          @default(0)
   generations       Generation[]
   models            LoraModel[]
-  trainings         Training[]     
+  trainings         Training[]   
   starTransactions  StarTransaction[]
-  parameters        UserParameters?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-}
-
-model UserParameters {
-  id            String    @id @default(cuid())
-  userId        String    @unique
-  user          User      @relation(fields: [userId], references: [id])
-  model         Json      // Store model configuration
-  params        Json      // Store generation parameters
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  @@index([userId])
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 }
 
 model BaseModel {
   id            String       @id @default(cuid())
-  name          String      // e.g. "Flux"
-  version       String      // e.g. "v1.1"
+  name          String      
+  version       String      
   type          BaseModelType
   isDefault     Boolean     @default(false)
   generations   Generation[]
@@ -108,7 +95,7 @@ model Generation {
   imageUrl        String
   seed            BigInt?    
   starsUsed       Int
-  metadata        Json?      // Store generation parameters used
+  metadata        Json?      
   createdAt       DateTime    @default(now())
 
   @@index([userId])
