@@ -44,7 +44,14 @@ interface FalResponse {
   requestId: string;
 }
 
-const DEFAULT_BASE_MODEL_ID = 'flux-default';
+// Define constants for base model
+const BASE_MODEL = {
+  id: 'flux-default',
+  name: 'Flux',
+  version: 'v1.1',
+  type: 'FLUX'
+} as const;
+
 const DEFAULT_PARAMS: GenerationParams = {
   image_size: 'landscape_4_3',
   num_inference_steps: 28,
@@ -56,6 +63,28 @@ const DEFAULT_PARAMS: GenerationParams = {
 };
 
 export class GenerationService {
+  private static async ensureBaseModel() {
+    try {
+      const baseModel = await prisma.baseModel.upsert({
+        where: { id: BASE_MODEL.id },
+        update: {},
+        create: {
+          id: BASE_MODEL.id,
+          name: BASE_MODEL.name,
+          version: BASE_MODEL.version,
+          type: BASE_MODEL.type,
+          isDefault: true
+        }
+      });
+      
+      logger.info({ baseModel }, 'Base model ensured');
+      return baseModel;
+    } catch (error) {
+      logger.error({ error }, 'Failed to ensure base model');
+      throw error;
+    }
+  }
+
   static async generate(userId: string, options: GenerationOptions) {
     const { prompt, negativePrompt, loraPath, loraScale = 0.8, seed } = options;
 
@@ -73,6 +102,9 @@ export class GenerationService {
       if (!user || user.stars < 1) {
         throw new Error('Insufficient stars balance');
       }
+
+      // Ensure base model exists
+      await this.ensureBaseModel();
 
       // Get user's saved parameters
       const userConfig = await ParametersService.getParameters(user.id);
@@ -142,7 +174,7 @@ export class GenerationService {
               stars: { decrement: 1 },
               generations: {
                 create: {
-                  baseModelId: DEFAULT_BASE_MODEL_ID,
+                  baseModelId: BASE_MODEL.id,
                   prompt,
                   negativePrompt,
                   imageUrl: generatedImageUrl,
