@@ -1,20 +1,20 @@
 import { logger } from '../../lib/logger.js';
-import { saveUserConfig } from '../../storage/config.js';
+import { ParametersService } from '../../services/parameters.js';
 
-export async function handleSaveParams(user_id: string, model: any, params: any) {
+export async function handleSaveParams(userId: string, model: any, params: any) {
   try {
-    logger.debug({ user_id, model, params }, 'Processing save parameters request');
+    logger.debug({ userId, model, params }, 'Processing save parameters request');
     
-    // Save to user config
-    await saveUserConfig(user_id, {
+    // Save parameters to database
+    await ParametersService.saveParameters({
+      userId,
       model,
-      params,
-      updatedAt: new Date().toISOString()
+      params
     });
     
-    logger.info({ user_id }, 'Parameters processed successfully');
+    logger.info({ userId }, 'Parameters processed successfully');
   } catch (error) {
-    logger.error({ error, user_id }, 'Error processing parameters');
+    logger.error({ error, userId }, 'Error processing parameters');
     throw error;
   }
 }
