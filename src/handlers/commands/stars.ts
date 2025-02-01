@@ -1,34 +1,9 @@
-import { Context } from '../../types';
-import { starPacks } from '../../stars';
+import { CommandContext } from 'grammy';
+import { getTelegramId } from '../../utils/telegram';
 
-export async function handleStarsCommand(ctx: Context) {
-  if (!ctx.from) {
-    return ctx.reply('Could not identify user');
-  }
-
-  const user = await ctx.db.user.findUnique({
-    where: { telegramId: ctx.from.id.toString() }
+export const stars = async (ctx: CommandContext) => {
+  const user = await prisma.user.findUnique({
+    where: { telegramId: getTelegramId(ctx.from.id) }
   });
-
-  if (!user) {
-    return ctx.reply('Please start the bot first with /start');
-  }
-
-  const message = [
-    `You have ${user.stars} ⭐`,
-    '\nStar packs available:',
-    ...starPacks.map(pack => `${pack.label} - ${pack.price} XTR`),
-    '\nTo buy stars, click on the pack you want to purchase.'
-  ].join('\n');
-
-  const buttons = starPacks.map(pack => [{
-    text: pack.label,
-    callback_data: `buy_stars:${pack.stars}`
-  }]);
-
-  await ctx.reply(message, {
-    reply_markup: {
-      inline_keyboard: buttons
-    }
-  });
-}
+  // Rest of your code...
+};
