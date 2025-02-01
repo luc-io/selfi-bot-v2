@@ -1,59 +1,38 @@
-import { PrismaClient, Prisma } from '@prisma/client';
-import { logger } from '../lib/logger.js';
-import type { UserParameters } from '../types/params.js';
+import { PrismaClient } from '@prisma/client';
+import { prisma } from '../prisma';
 
-const prisma = new PrismaClient();
-
-interface SaveParametersOptions extends UserParameters {
-  userId: string;
-}
-
-export class ParametersService {
-  static async saveParameters({ userId, model, params }: SaveParametersOptions) {
-    try {
-      logger.debug({ userId, model, params }, 'Saving user parameters');
-
-      // Convert objects to plain JSON first
-      const modelJson = JSON.parse(JSON.stringify(model));
-      const paramsJson = JSON.parse(JSON.stringify(params));
-
-      const result = await prisma.userParameters.upsert({
-        where: { userId },
-        update: {
-          model: modelJson as unknown as Prisma.InputJsonValue,
-          params: paramsJson as unknown as Prisma.InputJsonValue,
-          updatedAt: new Date()
-        },
-        create: {
-          userId,
-          model: modelJson as unknown as Prisma.InputJsonValue,
-          params: paramsJson as unknown as Prisma.InputJsonValue
-        }
-      });
-
-      logger.info({ userId }, 'User parameters saved successfully');
-      return result;
-
-    } catch (error) {
-      logger.error({ error, userId }, 'Failed to save user parameters');
-      throw error;
-    }
+export const updateUserParameters = async (
+  userId: string,
+  params: Record<string, unknown>
+) => {
+  try {
+    return await prisma.userParameters.upsert({
+      where: {
+        userId,
+      },
+      update: {
+        params: params as Prisma.JsonValue,
+      },
+      create: {
+        userId,
+        params: params as Prisma.JsonValue,
+      },
+    });
+  } catch (error) {
+    console.error('Error updating user parameters:', error);
+    throw error;
   }
+};
 
-  static async getParameters(userId: string) {
-    try {
-      logger.debug({ userId }, 'Getting user parameters');
-
-      const parameters = await prisma.userParameters.findUnique({
-        where: { userId }
-      });
-
-      logger.info({ userId, found: !!parameters }, 'User parameters retrieved');
-      return parameters;
-
-    } catch (error) {
-      logger.error({ error, userId }, 'Failed to get user parameters');
-      throw error;
-    }
+export const getUserParameters = async (userId: string) => {
+  try {
+    return await prisma.userParameters.findUnique({
+      where: {
+        userId,
+      },
+    });
+  } catch (error) {
+    console.error('Error getting user parameters:', error);
+    throw error;
   }
-}
+};
