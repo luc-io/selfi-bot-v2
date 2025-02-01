@@ -13,17 +13,21 @@ export class ParametersService {
     try {
       logger.debug({ userId, model, params }, 'Saving user parameters');
 
+      // Convert objects to plain JSON first
+      const modelJson = JSON.parse(JSON.stringify(model));
+      const paramsJson = JSON.parse(JSON.stringify(params));
+
       const result = await prisma.userParameters.upsert({
         where: { userId },
         update: {
-          model: model as Prisma.InputJsonValue,
-          params: params as Prisma.InputJsonValue,
+          model: modelJson as unknown as Prisma.InputJsonValue,
+          params: paramsJson as unknown as Prisma.InputJsonValue,
           updatedAt: new Date()
         },
         create: {
           userId,
-          model: model as Prisma.InputJsonValue,
-          params: params as Prisma.InputJsonValue
+          model: modelJson as unknown as Prisma.InputJsonValue,
+          params: paramsJson as unknown as Prisma.InputJsonValue
         }
       });
 

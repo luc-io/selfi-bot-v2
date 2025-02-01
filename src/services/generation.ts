@@ -84,7 +84,7 @@ export class GenerationService {
       try {
         // Parse saved params or use defaults
         const savedParams = userConfig?.params ? 
-          (userConfig.params as unknown as GenerationParams) : 
+          JSON.parse(JSON.stringify(userConfig.params)) as GenerationParams : 
           {};
 
         // Use saved parameters or defaults
@@ -134,6 +134,8 @@ export class GenerationService {
 
         // Update database only if we have a valid image
         if (generatedImageUrl) {
+          const paramsJson = JSON.parse(JSON.stringify(generationParams));
+
           await prisma.user.update({
             where: { id: userId },
             data: {
@@ -150,7 +152,7 @@ export class GenerationService {
                     falRequestId,
                     inferenceTime: response.data.timings?.inference,
                     hasNsfw: response.data.has_nsfw_concepts?.[0] || false,
-                    params: generationParams as Prisma.InputJsonValue
+                    params: paramsJson as unknown as Prisma.InputJsonValue
                   }
                 }
               }
