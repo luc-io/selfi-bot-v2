@@ -3,42 +3,73 @@ import { logger } from '../lib/logger.js';
 
 const prisma = new PrismaClient();
 
+export const BASE_MODELS = {
+  FLUX_LORA: {
+    id: 'flux-lora',
+    name: 'Flux Lora',
+    version: 'v1.0',
+    type: BaseModelType.FLUX,
+    isDefault: true,
+    falEndpoint: 'fal-ai/flux-lora'
+  },
+  FLUX_LORA_TRAINING: {
+    id: 'flux-lora-fast-training',
+    name: 'Flux Lora Training',
+    version: 'v1.0',
+    type: BaseModelType.FLUX,
+    isDefault: false,
+    falEndpoint: 'fal-ai/flux-lora-fast-training'
+  }
+} as const;
+
 export class BaseModelService {
-  static async ensureDefaultBaseModel() {
+  static async ensureBaseModels() {
     try {
-      // Check if default model exists
-      const existingModel = await prisma.baseModel.findUnique({
-        where: { id: 'flux-default' }
-      });
-
-      if (!existingModel) {
-        // Create default model if it doesn't exist
-        await prisma.baseModel.create({
-          data: {
-            id: 'flux-default',
-            name: 'Flux',
-            version: 'v1.0',
-            type: BaseModelType.FLUX,
-            isDefault: true
-          }
+      // Check and create both models
+      for (const model of Object.values(BASE_MODELS)) {
+        const existingModel = await prisma.baseModel.findUnique({
+          where: { id: model.id }
         });
-        logger.info('Created default base model');
-      }
 
+        if (!existingModel) {
+          await prisma.baseModel.create({
+            data: {
+              id: model.id,
+              name: model.name,
+              version: model.version,
+              type: model.type,
+              isDefault: model.isDefault
+            }
+          });
+          logger.info(`Created base model: ${model.name}`);
+        }
+      }
       return true;
     } catch (error: any) {
-      logger.error({ error: error.message }, 'Failed to ensure default base model');
-      throw new Error(`Failed to ensure default base model: ${error.message}`);
+      logger.error({ error: error.message }, 'Failed to ensure base models');
+      throw new Error(`Failed to ensure base models: ${error.message}`);
     }
   }
 
-  static async getDefaultBaseModel() {
-    const model = await prisma.baseModel.findFirst({
-      where: { isDefault: true }
+  static async getGenerationModel() {
+    const model = await prisma.baseModel.findUnique({
+      where: { id: BASE_MODELS.FLUX_LORA.id }
     });
 
     if (!model) {
-      throw new Error('No default base model found');
+      throw new Error('Generation model not found');
+    }
+
+    return model;
+  }
+
+  static async getTrainingModel() {
+    const model = await prisma.baseModel.findUnique({
+      where: { id: BASE_MODELS.FLUX_LORA_TRAINING.id }
+    });
+
+    if (!model) {
+      throw new Error('Training model not found');
     }
 
     return model;
