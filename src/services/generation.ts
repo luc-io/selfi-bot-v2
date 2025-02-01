@@ -1,9 +1,8 @@
 import { fal } from '@fal-ai/client';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { config } from '../config.js';
 import { logger } from '../lib/logger.js';
-import { ParametersService } from './parameters.js';
-import type { GenerationParams } from '../types/params.js';
+import { BaseModelService } from './baseModel.js';
 
 // Initialize FAL client
 fal.config({ credentials: config.FAL_KEY });
@@ -18,12 +17,15 @@ interface GenerationOptions {
   seed?: number;
 }
 
-interface FalRequest extends GenerationParams {
+interface FalRequest {
   prompt: string;
   negative_prompt?: string;
   lora_path?: string;
   lora_scale?: number;
   seed?: number;
+  image_size?: 'landscape_4_3' | 'portrait_4_3' | 'square' | { width: number; height: number };
+  num_inference_steps?: number;
+  guidance_scale?: number;
 }
 
 interface FalResponse {
@@ -44,51 +46,17 @@ interface FalResponse {
   requestId: string;
 }
 
-// Define constants for base model
-const BASE_MODEL = {
-  id: 'flux-default',
-  name: 'Flux',
-  version: 'v1.1',
-  type: 'FLUX'
-} as const;
-
-const DEFAULT_PARAMS: GenerationParams = {
-  image_size: 'landscape_4_3',
-  num_inference_steps: 28,
-  guidance_scale: 3.5,
-  num_images: 1,
-  sync_mode: false,
-  enable_safety_checker: true,
-  output_format: 'jpeg'
-};
+const DEFAULT_IMAGE_SIZE = 'landscape_4_3';
 
 export class GenerationService {
-  private static async ensureBaseModel() {
-    try {
-      const baseModel = await prisma.baseModel.upsert({
-        where: { id: BASE_MODEL.id },
-        update: {},
-        create: {
-          id: BASE_MODEL.id,
-          name: BASE_MODEL.name,
-          version: BASE_MODEL.version,
-          type: BASE_MODEL.type,
-          isDefault: true
-        }
-      });
-      
-      logger.info({ baseModel }, 'Base model ensured');
-      return baseModel;
-    } catch (error) {
-      logger.error({ error }, 'Failed to ensure base model');
-      throw error;
-    }
-  }
-
   static async generate(userId: string, options: GenerationOptions) {
     const { prompt, negativePrompt, loraPath, loraScale = 0.8, seed } = options;
 
     try {
+      // Ensure default base model exists
+      await BaseModelService.ensureDefaultBaseModel();
+      const defaultBaseModel = await BaseModelService.getDefaultBaseModel();
+
       // First check user's stars balance and get telegramId
       const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -103,38 +71,22 @@ export class GenerationService {
         throw new Error('Insufficient stars balance');
       }
 
-      // Ensure base model exists
-      await this.ensureBaseModel();
-
-      // Get user's saved parameters
-      const userConfig = await ParametersService.getParameters(user.id);
-      logger.info({ userConfig }, 'Retrieved user parameters for generation');
-
       let generatedImageUrl: string | null = null;
       let falRequestId: string | null = null;
 
       try {
-        // Parse saved params or use defaults
-        const savedParams = userConfig?.params ? 
-          JSON.parse(JSON.stringify(userConfig.params)) as GenerationParams : 
-          {};
-
-        // Use saved parameters or defaults
-        const generationParams: FalRequest = {
-          ...DEFAULT_PARAMS,
-          ...savedParams,
-          prompt,
-          negative_prompt: negativePrompt,
-          lora_path: loraPath,
-          lora_scale: loraScale,
-          seed: seed || Math.floor(Math.random() * 1000000)
-        };
-
-        logger.info({ generationParams }, 'Using generation parameters');
-
         // Generate image
         const falResult = await fal.subscribe('fal-ai/flux-lora', {
-          input: generationParams,
+          input: {
+            prompt,
+            negative_prompt: negativePrompt,
+            lora_path: loraPath,
+            lora_scale: loraScale,
+            seed,
+            image_size: DEFAULT_IMAGE_SIZE,
+            num_inference_steps: 28,
+            guidance_scale: 3.5,
+          } as FalRequest,
           pollInterval: 1000,
           logs: true,
           onQueueUpdate: (update: { status: string; position?: number }) => {
@@ -142,8 +94,7 @@ export class GenerationService {
               status: update.status,
               position: update.position,
               prompt,
-              userId: user.telegramId,
-              params: generationParams
+              userId: user.telegramId
             }, 'Generation queue update');
           },
         });
@@ -166,15 +117,13 @@ export class GenerationService {
 
         // Update database only if we have a valid image
         if (generatedImageUrl) {
-          const paramsJson = JSON.parse(JSON.stringify(generationParams));
-
           await prisma.user.update({
             where: { id: userId },
             data: {
               stars: { decrement: 1 },
               generations: {
                 create: {
-                  baseModelId: BASE_MODEL.id,
+                  baseModelId: defaultBaseModel.id,
                   prompt,
                   negativePrompt,
                   imageUrl: generatedImageUrl,
@@ -183,8 +132,7 @@ export class GenerationService {
                   metadata: {
                     falRequestId,
                     inferenceTime: response.data.timings?.inference,
-                    hasNsfw: response.data.has_nsfw_concepts?.[0] || false,
-                    params: paramsJson as unknown as Prisma.InputJsonValue
+                    hasNsfw: response.data.has_nsfw_concepts?.[0] || false
                   }
                 }
               }
@@ -196,8 +144,7 @@ export class GenerationService {
             prompt,
             falRequestId,
             timing: response.data.timings?.inference,
-            userId: user.telegramId,
-            params: generationParams
+            userId: user.telegramId
           }, 'Generation succeeded');
 
           return { imageUrl: generatedImageUrl };
