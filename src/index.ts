@@ -1,34 +1,26 @@
 import { Bot, session } from 'grammy';
-import { autoRetry } from '@grammyjs/auto-retry';
-import { run } from '@grammyjs/runner';
-import type { BotContext } from './types/bot.js';
-import { config } from './config.js';
+import { BotContext } from './types/context';
 import { setupCommands } from './bot/commands/index.js';
-import { setupServer } from './server/index.js';
-import { logger } from './lib/logger.js';
+import { config } from './config';
 
-// Create bot instance
-const bot = new Bot<BotContext>(config.TELEGRAM_BOT_TOKEN);
+const bot = new Bot<BotContext>(config.BOT_TOKEN);
 
-// Add middleware
-bot.api.config.use(autoRetry());
-
+// Set up session
 bot.use(session({
-  initial: () => ({})
+  initial: () => ({
+    // Initialize your session data here
+  })
 }));
 
-// Error handling
-bot.catch((err) => {
-  logger.error({ error: err }, 'Bot error');
-});
-
-// Setup bot commands
+// Initialize commands
 setupCommands(bot);
 
-// Start bot
-run(bot);
-
-// Setup API server
-setupServer();
-
-logger.info('Bot started');
+export const startBot = async () => {
+  try {
+    await bot.start();
+    console.log('Bot started successfully');
+  } catch (error) {
+    console.error('Error starting bot:', error);
+    process.exit(1);
+  }
+};
