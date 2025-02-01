@@ -16,14 +16,14 @@ export class ParametersService {
       const result = await prisma.userParameters.upsert({
         where: { userId },
         update: {
-          model: model as unknown as Prisma.JsonValue,
-          params: params as unknown as Prisma.JsonValue,
+          model: model as Prisma.InputJsonValue,
+          params: params as Prisma.InputJsonValue,
           updatedAt: new Date()
         },
         create: {
           userId,
-          model: model as unknown as Prisma.JsonValue,
-          params: params as unknown as Prisma.JsonValue
+          model: model as Prisma.InputJsonValue,
+          params: params as Prisma.InputJsonValue
         }
       });
 

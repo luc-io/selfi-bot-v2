@@ -150,7 +150,7 @@ export class GenerationService {
                     falRequestId,
                     inferenceTime: response.data.timings?.inference,
                     hasNsfw: response.data.has_nsfw_concepts?.[0] || false,
-                    params: generationParams as unknown as Prisma.JsonValue
+                    params: generationParams as Prisma.InputJsonValue
                   }
                 }
               }
