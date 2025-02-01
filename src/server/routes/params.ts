@@ -9,9 +9,13 @@ export async function paramsRoutes(fastify: FastifyInstance) {
   fastify.post<{ Body: ParamsData }>('/api/params', {
     preHandler: [validateInitData],
     handler: async (request, reply) => {
+      logger.info({ 
+        headers: request.headers,
+        body: request.body,
+        url: request.url
+      }, 'Received params request');
+
       const { user_id, model, params } = request.body;
-      
-      logger.info({ user_id, model }, 'Saving user parameters');
       
       try {
         await handleSaveParams(user_id, model, params);
@@ -22,38 +26,16 @@ export async function paramsRoutes(fastify: FastifyInstance) {
           message: 'Parameters saved successfully'
         });
       } catch (error) {
-        logger.error({ error, user_id }, 'Failed to save parameters');
-        return reply.status(500).send({
-          success: false,
-          message: 'Failed to save parameters'
-        });
-      }
-    }
-  });
+        logger.error({ 
+          error, 
+          user_id,
+          model,
+          params 
+        }, 'Failed to save parameters');
 
-  // Get user parameters (optional)
-  fastify.get<{ Querystring: { user_id: string } }>('/api/params', {
-    preHandler: [validateInitData],
-    handler: async (request, reply) => {
-      const { user_id } = request.query;
-      
-      logger.info({ user_id }, 'Getting user parameters');
-      
-      try {
-        // Get params logic here
-        // Return user's saved parameters
-        
-        return reply.status(200).send({
-          success: true,
-          data: {
-            // Return saved params
-          }
-        });
-      } catch (error) {
-        logger.error({ error, user_id }, 'Failed to get parameters');
         return reply.status(500).send({
           success: false,
-          message: 'Failed to get parameters'
+          message: error instanceof Error ? error.message : 'Failed to save parameters'
         });
       }
     }
