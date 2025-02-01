@@ -2,7 +2,7 @@ import { fal } from '@fal-ai/client';
 import { PrismaClient } from '@prisma/client';
 import { config } from '../config.js';
 import { logger } from '../lib/logger.js';
-import { getUserConfig } from '../storage/config.js';
+import { ParametersService } from './parameters.js';
 
 // Initialize FAL client
 fal.config({ credentials: config.FAL_KEY });
@@ -77,8 +77,8 @@ export class GenerationService {
       }
 
       // Get user's saved parameters
-      const userConfig = await getUserConfig(user.telegramId.toString());
-      logger.info({ userConfig }, 'Retrieved user config');
+      const userConfig = await ParametersService.getParameters(user.id);
+      logger.info({ userConfig }, 'Retrieved user parameters for generation');
 
       let generatedImageUrl: string | null = null;
       let falRequestId: string | null = null;
@@ -92,7 +92,7 @@ export class GenerationService {
           negative_prompt: negativePrompt,
           lora_path: loraPath,
           lora_scale: loraScale,
-          seed: seed || userConfig?.params?.seed || Math.floor(Math.random() * 1000000)
+          seed: seed || Math.floor(Math.random() * 1000000)
         };
 
         logger.info({ generationParams }, 'Using generation parameters');
