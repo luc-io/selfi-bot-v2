@@ -1,3 +1,7 @@
+-- Drop UserParameters table first
+DROP TABLE IF EXISTS "UserParameters";
+
+-- Safe conversion of telegramId to BIGINT
 -- First, create a temporary column
 ALTER TABLE "User" ADD COLUMN "telegramId_new" BIGINT;
 
