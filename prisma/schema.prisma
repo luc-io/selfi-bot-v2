@@ -9,18 +9,31 @@ datasource db {
 }
 
 model User {
-  id                String       @id
-  telegramId        String       @unique
+  id                String         @id
+  telegramId        String         @unique
   username          String?
-  stars             Int          @default(0)
-  totalSpentStars   Int          @default(0)
-  totalBoughtStars  Int          @default(0)
+  stars             Int            @default(0)
+  totalSpentStars   Int            @default(0)
+  totalBoughtStars  Int            @default(0)
   generations       Generation[]
   models            LoraModel[]
-  trainings         Training[]   // Added this relation
+  trainings         Training[]     
   starTransactions  StarTransaction[]
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  parameters        UserParameters?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+}
+
+model UserParameters {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  user          User      @relation(fields: [userId], references: [id])
+  model         Json      // Store model configuration
+  params        Json      // Store generation parameters
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId])
 }
 
 model BaseModel {
@@ -95,7 +108,7 @@ model Generation {
   imageUrl        String
   seed            BigInt?    
   starsUsed       Int
-  metadata        Json?      
+  metadata        Json?      // Store generation parameters used
   createdAt       DateTime    @default(now())
 
   @@index([userId])
