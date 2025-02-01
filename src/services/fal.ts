@@ -17,9 +17,11 @@ interface FalGenerationResponse {
 
 export class FalService {
   private readonly apiKey: string;
+  private readonly apiSecret: string;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, apiSecret: string) {
     this.apiKey = apiKey;
+    this.apiSecret = apiSecret;
   }
 
   public async generateImage(prompt: string, negativePrompt?: string): Promise<string> {
@@ -27,7 +29,7 @@ export class FalService {
       const result = await fetch('https://queue.fal.run/fal-ai/flux-lora/subscribe', {
         method: 'POST',
         headers: {
-          'Authorization': `Key ${this.apiKey}`,
+          'Authorization': `Key ${this.apiKey}:${this.apiSecret}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({

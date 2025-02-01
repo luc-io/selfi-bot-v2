@@ -13,14 +13,23 @@ model User {
   telegramId        String       @unique
   username          String?
   stars             Int          @default(0)
-  totalSpentStars   Int          @default(0)
-  totalBoughtStars  Int          @default(0)
+  totalSpentStars   Int         @default(0)
+  totalBoughtStars  Int         @default(0)
   generations       Generation[]
   models            LoraModel[]
-  trainings         Training[]   // Added this relation
+  trainings         Training[]
   starTransactions  StarTransaction[]
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  parameters        UserParameters?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+}
+
+model UserParameters {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  params    Json     // Store all the generation parameters
+  updatedAt DateTime @updatedAt
 }
 
 model BaseModel {
@@ -37,17 +46,17 @@ model BaseModel {
 model LoraModel {
   id              String       @id @default(cuid())
   name            String
-  triggerWord     String      
-  weightsUrl      String?     @unique  
-  configUrl       String?     @unique  
-  baseModelId     String      
+  triggerWord     String
+  weightsUrl      String?     @unique
+  configUrl       String?     @unique
+  baseModelId     String
   baseModel       BaseModel   @relation(fields: [baseModelId], references: [id])
   type            LoraType    @default(STYLE)
   status          LoraStatus  @default(PENDING)
-  previewImageUrl String?     
+  previewImageUrl String?
   isPublic        Boolean     @default(false)
   starsRequired   Int         @default(2)
-  userId          String      
+  userId          String
   user            User        @relation(fields: [userId], references: [id])
   generations     Generation[]
   training        Training?
@@ -60,23 +69,23 @@ model LoraModel {
 
 model Training {
   id              String       @id @default(cuid())
-  loraId          String      @unique  
+  loraId          String      @unique
   lora            LoraModel   @relation(fields: [loraId], references: [id])
   baseModelId     String
   baseModel       BaseModel   @relation(fields: [baseModelId], references: [id])
   userId          String
   user            User        @relation(fields: [userId], references: [id])
-  imageUrls       String[]    
-  instancePrompt  String      
-  classPrompt     String?     
+  imageUrls       String[]
+  instancePrompt  String
+  classPrompt     String?
   steps           Int         @default(100)
   learningRate    Float       @default(0.0001)
-  starsSpent      Int        
+  starsSpent      Int
   status          TrainStatus @default(PENDING)
-  error           String?     
+  error           String?
   startedAt       DateTime    @default(now())
-  completedAt     DateTime?   
-  metadata        Json?       
+  completedAt     DateTime?
+  metadata        Json?
 
   @@index([userId])
   @@index([status])
@@ -91,11 +100,11 @@ model Generation {
   loraId          String?     // Optional - generation might not use a LoRA
   lora            LoraModel?  @relation(fields: [loraId], references: [id])
   prompt          String
-  negativePrompt  String?    
+  negativePrompt  String?
   imageUrl        String
-  seed            BigInt?    
+  seed            BigInt?
   starsUsed       Int
-  metadata        Json?      
+  metadata        Json?
   createdAt       DateTime    @default(now())
 
   @@index([userId])
@@ -106,11 +115,11 @@ model StarTransaction {
   id                      String    @id @default(cuid())
   userId                  String
   user                    User      @relation(fields: [userId], references: [id])
-  amount                  Int       
+  amount                  Int
   type                    TransactionType
   telegramPaymentChargeId String?   @unique
   status                  TransactionStatus @default(COMPLETED)
-  metadata                Json?     
+  metadata                Json?
   createdAt              DateTime   @default(now())
 
   @@index([userId])
@@ -124,8 +133,8 @@ enum BaseModelType {
 }
 
 enum LoraType {
-  STYLE    
-  PORTRAIT 
+  STYLE
+  PORTRAIT
 }
 
 enum LoraStatus {
