@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { config } from '../config.js';
 import { logger } from '../lib/logger.js';
 import { ParametersService } from './parameters.js';
+import type { GenerationParams } from '../types/params.js';
 
 // Initialize FAL client
 fal.config({ credentials: config.FAL_KEY });
@@ -17,17 +18,12 @@ interface GenerationOptions {
   seed?: number;
 }
 
-interface FalRequest {
+interface FalRequest extends GenerationParams {
   prompt: string;
   negative_prompt?: string;
   lora_path?: string;
   lora_scale?: number;
   seed?: number;
-  image_size?: 'landscape_4_3' | 'portrait_4_3' | 'square' | { width: number; height: number };
-  num_inference_steps?: number;
-  guidance_scale?: number;
-  num_images?: number;
-  enable_safety_checker?: boolean;
 }
 
 interface FalResponse {
@@ -49,12 +45,14 @@ interface FalResponse {
 }
 
 const DEFAULT_BASE_MODEL_ID = 'flux-default';
-const DEFAULT_PARAMS = {
-  image_size: 'landscape_4_3' as const,
+const DEFAULT_PARAMS: GenerationParams = {
+  image_size: 'landscape_4_3',
   num_inference_steps: 28,
   guidance_scale: 3.5,
   num_images: 1,
-  enable_safety_checker: true
+  sync_mode: false,
+  enable_safety_checker: true,
+  output_format: 'jpeg'
 };
 
 export class GenerationService {
@@ -85,9 +83,9 @@ export class GenerationService {
 
       try {
         // Use saved parameters or defaults
-        const generationParams = {
+        const generationParams: FalRequest = {
           ...DEFAULT_PARAMS,
-          ...(userConfig?.params || {}),
+          ...(userConfig?.params as GenerationParams || {}),
           prompt,
           negative_prompt: negativePrompt,
           lora_path: loraPath,
@@ -99,7 +97,7 @@ export class GenerationService {
 
         // Generate image
         const falResult = await fal.subscribe('fal-ai/flux-lora', {
-          input: generationParams as FalRequest,
+          input: generationParams,
           pollInterval: 1000,
           logs: true,
           onQueueUpdate: (update: { status: string; position?: number }) => {

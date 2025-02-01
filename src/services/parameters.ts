@@ -1,12 +1,11 @@
 import { PrismaClient } from '@prisma/client';
 import { logger } from '../lib/logger.js';
+import type { UserParameters } from '../types/params.js';
 
 const prisma = new PrismaClient();
 
-interface SaveParametersOptions {
+interface SaveParametersOptions extends UserParameters {
   userId: string;
-  model: any;
-  params: any;
 }
 
 export class ParametersService {
