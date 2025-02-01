@@ -1,66 +1,41 @@
-import fastify from 'fastify';
+import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import { config } from '../config.js';
 import { logger } from '../lib/logger.js';
-import { paramsRoutes } from './routes/params.js';
+import userParametersRoutes from './routes/userParameters.js';
+
+const server = Fastify({
+  logger: false,
+});
 
 export async function setupServer() {
-  const server = fastify({
-    logger,
-  });
-
-  logger.info('Setting up server...');
-
-  // Register CORS
-  await server.register(cors, {
-    origin: config.MINIAPP_URL,
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'x-telegram-init-data'],
-  });
-
-  logger.info('CORS configured with origin:', config.MINIAPP_URL);
-
-  // Register routes
   try {
-    await server.register(paramsRoutes, { prefix: '/' });
+    logger.info('Setting up server...');
+
+    // Configure CORS
+    const origin = process.env.CORS_ORIGIN || '*';
+    await server.register(cors, { 
+      origin,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type']
+    });
+    logger.info(`CORS configured with origin: ${origin}`);
+
+    // Register routes
+    await server.register(userParametersRoutes);
     logger.info('Routes registered successfully');
 
-    // Log all registered routes
-    server.ready(() => {
-      logger.info('Registered routes:', {
-        routes: server.printRoutes()
-      });
-    });
-  } catch (error) {
-    logger.error('Failed to register routes:', error);
-    throw error;
-  }
+    const registeredRoutes = server.printRoutes();
+    logger.info('Registered routes:');
+    logger.info(registeredRoutes);
 
-  // Add error handler
-  server.setErrorHandler((error, request, reply) => {
-    logger.error({ 
-      error, 
-      path: request.url, 
-      method: request.method,
-      body: request.body
-    }, 'Server error');
-    
-    reply.status(500).send({
-      success: false,
-      message: 'Internal server error',
-    });
-  });
+    // Start the server
+    await server.listen({ port: 3001, host: '0.0.0.0' });
+    logger.info('Server started', { port: 3001, host: '0.0.0.0' });
 
-  try {
-    const port = parseInt(config.PORT);
-    const host = '0.0.0.0';
-    
-    await server.listen({ port, host });
-    logger.info({ port, host }, 'Server started');
   } catch (err) {
-    logger.error({ error: err }, 'Failed to start server');
+    logger.error('Error starting server:', err);
     process.exit(1);
   }
-
-  return server;
 }
+
+export { server };
