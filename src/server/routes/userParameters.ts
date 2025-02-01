@@ -41,13 +41,13 @@ export default async function userParametersRoutes(fastify: FastifyInstance) {
       }
 
       const parameters = await prisma.userParameters.upsert({
-        where: { userId: user.id },
+        where: { userId: user.id.toString() },
         update: {
           params: body.params || {},
           updatedAt: new Date(),
         },
         create: {
-          userId: user.id,
+          userId: user.id.toString(),
           params: body.params || {},
         },
       });
@@ -55,7 +55,7 @@ export default async function userParametersRoutes(fastify: FastifyInstance) {
       return parameters;
     } catch (error: any) {
       logger.error({ error: error.message }, 'Failed to update user parameters');
-      reply.code(500).send({ error: 'Internal server error' });
+      reply.code(500).send({ error: error.message || 'Internal server error' });
     }
   });
 }
