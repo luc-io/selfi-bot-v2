@@ -10,7 +10,7 @@ datasource db {
 
 model User {
   id                String       @id
-  telegramId        BigInt      @unique  // Changed from String to BigInt
+  telegramId        BigInt       @unique
   username          String?
   stars             Int          @default(0)
   totalSpentStars   Int          @default(0)
@@ -19,14 +19,23 @@ model User {
   models            LoraModel[]
   trainings         Training[]   
   starTransactions  StarTransaction[]
+  parameters        UserParameters?
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
 }
 
+model UserParameters {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  params    Json     // Store all the generation parameters
+  updatedAt DateTime @updatedAt
+}
+
 model BaseModel {
   id            String       @id @default(cuid())
-  name          String      
-  version       String      
+  name          String      // e.g. "Flux"
+  version       String      // e.g. "v1.1"
   type          BaseModelType
   isDefault     Boolean     @default(false)
   generations   Generation[]
