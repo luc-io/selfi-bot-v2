@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { logger } from '../lib/logger.js';
 import type { UserParameters } from '../types/params.js';
 
@@ -16,14 +16,14 @@ export class ParametersService {
       const result = await prisma.userParameters.upsert({
         where: { userId },
         update: {
-          model,
-          params,
+          model: model as unknown as Prisma.JsonValue,
+          params: params as unknown as Prisma.JsonValue,
           updatedAt: new Date()
         },
         create: {
           userId,
-          model,
-          params
+          model: model as unknown as Prisma.JsonValue,
+          params: params as unknown as Prisma.JsonValue
         }
       });
 

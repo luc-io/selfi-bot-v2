@@ -1,5 +1,5 @@
 import { fal } from '@fal-ai/client';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { config } from '../config.js';
 import { logger } from '../lib/logger.js';
 import { ParametersService } from './parameters.js';
@@ -82,10 +82,15 @@ export class GenerationService {
       let falRequestId: string | null = null;
 
       try {
+        // Parse saved params or use defaults
+        const savedParams = userConfig?.params ? 
+          (userConfig.params as unknown as GenerationParams) : 
+          {};
+
         // Use saved parameters or defaults
         const generationParams: FalRequest = {
           ...DEFAULT_PARAMS,
-          ...(userConfig?.params as GenerationParams || {}),
+          ...savedParams,
           prompt,
           negative_prompt: negativePrompt,
           lora_path: loraPath,
@@ -145,7 +150,7 @@ export class GenerationService {
                     falRequestId,
                     inferenceTime: response.data.timings?.inference,
                     hasNsfw: response.data.has_nsfw_concepts?.[0] || false,
-                    params: generationParams
+                    params: generationParams as unknown as Prisma.JsonValue
                   }
                 }
               }
