@@ -2,7 +2,7 @@ import { fal } from '@fal-ai/client';
 import { PrismaClient } from '@prisma/client';
 import { config } from '../config.js';
 import { logger } from '../lib/logger.js';
-import { BaseModelService } from './baseModel.js';
+import { BaseModelService, BASE_MODELS } from './baseModel.js';
 
 // Initialize FAL client
 fal.config({ credentials: config.FAL_KEY });
@@ -53,9 +53,9 @@ export class GenerationService {
     const { prompt, negativePrompt, loraPath, loraScale = 0.8, seed } = options;
 
     try {
-      // Ensure default base model exists
-      await BaseModelService.ensureDefaultBaseModel();
-      const defaultBaseModel = await BaseModelService.getDefaultBaseModel();
+      // Ensure base models exist and get the generation model
+      await BaseModelService.ensureBaseModels();
+      const baseModel = await BaseModelService.getGenerationModel();
 
       // First check user's stars balance and get telegramId
       const user = await prisma.user.findUnique({
@@ -75,8 +75,8 @@ export class GenerationService {
       let falRequestId: string | null = null;
 
       try {
-        // Generate image
-        const falResult = await fal.subscribe('fal-ai/flux-lora', {
+        // Generate image using FAL.ai endpoint from BASE_MODELS
+        const falResult = await fal.subscribe(BASE_MODELS.FLUX_LORA.falEndpoint, {
           input: {
             prompt,
             negative_prompt: negativePrompt,
@@ -123,7 +123,7 @@ export class GenerationService {
               stars: { decrement: 1 },
               generations: {
                 create: {
-                  baseModelId: defaultBaseModel.id,
+                  baseModelId: baseModel.id,  // Using the proper base model ID
                   prompt,
                   negativePrompt,
                   imageUrl: generatedImageUrl,
