@@ -45,9 +45,6 @@ interface FalResponse {
   requestId: string;
 }
 
-const DEFAULT_BASE_MODEL_ID = 'flux-default';
-const DEFAULT_IMAGE_SIZE = 'landscape_4_3';
-
 export class GenerationService {
   static async generate(userId: string, options: GenerationOptions) {
     const { prompt, negativePrompt, loraPath, loraScale = 0.8, seed } = options;
@@ -71,7 +68,7 @@ export class GenerationService {
       let falRequestId: string | null = null;
 
       try {
-        // Generate image
+        // Generate image using flux-lora model
         const falResult = await fal.subscribe('fal-ai/flux-lora', {
           input: {
             prompt,
@@ -79,7 +76,7 @@ export class GenerationService {
             lora_path: loraPath,
             lora_scale: loraScale,
             seed,
-            image_size: DEFAULT_IMAGE_SIZE,
+            image_size: 'landscape_4_3',
             num_inference_steps: 28,
             guidance_scale: 3.5,
           } as FalRequest,
@@ -111,6 +108,26 @@ export class GenerationService {
 
         generatedImageUrl = response.data.images[0].url;
 
+        // Get or create the base model
+        let baseModel = await prisma.baseModel.findFirst({
+          where: {
+            name: 'Flux',
+            type: 'FLUX',
+            isDefault: true
+          }
+        });
+
+        if (!baseModel) {
+          baseModel = await prisma.baseModel.create({
+            data: {
+              name: 'Flux',
+              version: 'v1',
+              type: 'FLUX',
+              isDefault: true
+            }
+          });
+        }
+
         // Update database only if we have a valid image
         if (generatedImageUrl) {
           await prisma.user.update({
@@ -119,7 +136,7 @@ export class GenerationService {
               stars: { decrement: 1 },
               generations: {
                 create: {
-                  baseModelId: DEFAULT_BASE_MODEL_ID,
+                  baseModelId: baseModel.id,
                   prompt,
                   negativePrompt,
                   imageUrl: generatedImageUrl,
