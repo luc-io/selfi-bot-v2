@@ -2,21 +2,18 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import { prisma } from '../prisma';
 
 export class ParametersService {
-  static async updateUserParameters(
-    userId: string,
-    params: Record<string, unknown>
-  ) {
+  static async saveParameters(params: Record<string, unknown>) {
     try {
       return await prisma.userParameters.upsert({
         where: {
-          userId,
+          userId: params.userId as string,
         },
         update: {
-          params: params as Prisma.JsonValue,
+          params: params as Prisma.InputJsonValue,
         },
         create: {
-          userId,
-          params: params as Prisma.JsonValue,
+          userId: params.userId as string,
+          params: params as Prisma.InputJsonValue,
         },
       });
     } catch (error) {
