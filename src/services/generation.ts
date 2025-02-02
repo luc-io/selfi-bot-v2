@@ -62,8 +62,12 @@ const DEFAULT_PARAMS: GenerationParams = {
   num_images: 1,
 };
 
+interface GenerationResult {
+  imageUrls: string[];
+}
+
 export class GenerationService {
-  static async generate(userId: string, options: GenerationOptions) {
+  static async generate(userId: string, options: GenerationOptions): Promise<GenerationResult> {
     const { prompt, negativePrompt, loraPath, loraScale = 0.8, seed } = options;
 
     try {
@@ -96,7 +100,7 @@ export class GenerationService {
         finalParams: generationParams
       }, 'Using generation parameters');
 
-      let generatedImageUrl: string | null = null;
+      let generatedImageUrls: string[] = [];
       let falRequestId: string | null = null;
 
       try {
@@ -136,7 +140,7 @@ export class GenerationService {
           throw new Error('No images in response');
         }
 
-        generatedImageUrl = response.data.images[0].url;
+        generatedImageUrls = response.data.images.map(image => image.url);
 
         // Get or create the base model
         let baseModel = await prisma.baseModel.findFirst({
@@ -158,8 +162,8 @@ export class GenerationService {
           });
         }
 
-        // Update database only if we have a valid image
-        if (generatedImageUrl) {
+        // Create a generation record for each image
+        if (generatedImageUrls.length > 0) {
           const metadata: Prisma.JsonObject = {
             falRequestId: falRequestId || '',
             inferenceTime: response.data.timings?.inference || null,
@@ -167,26 +171,29 @@ export class GenerationService {
             params: {...generationParams}
           };
 
-          await prisma.user.update({
-            where: { id: userId },
-            data: {
-              stars: { decrement: 1 },
-              generations: {
-                create: {
-                  baseModelId: baseModel.id,
-                  prompt,
-                  negativePrompt,
-                  imageUrl: generatedImageUrl,
-                  seed: seed ? BigInt(seed) : null,
-                  starsUsed: 1,
-                  metadata
+          // Create generation records for all images in parallel
+          await Promise.all(generatedImageUrls.map(imageUrl => 
+            prisma.user.update({
+              where: { id: userId },
+              data: {
+                stars: { decrement: 1 },
+                generations: {
+                  create: {
+                    baseModelId: baseModel.id,
+                    prompt,
+                    negativePrompt,
+                    imageUrl,
+                    seed: seed ? BigInt(seed) : null,
+                    starsUsed: 1,
+                    metadata
+                  }
                 }
               }
-            }
-          });
+            })
+          ));
 
           logger.info({ 
-            imageUrl: generatedImageUrl,
+            imageUrls: generatedImageUrls,
             prompt,
             falRequestId,
             timing: response.data.timings?.inference,
@@ -194,9 +201,9 @@ export class GenerationService {
             params: generationParams
           }, 'Generation succeeded');
 
-          return { imageUrl: generatedImageUrl };
+          return { imageUrls: generatedImageUrls };
         } else {
-          throw new Error('Failed to get image URL from response');
+          throw new Error('Failed to get image URLs from response');
         }
 
       } catch (falError: any) {
