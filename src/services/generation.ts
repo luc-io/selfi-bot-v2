@@ -28,11 +28,12 @@ interface FalRequest {
   num_images?: number;
 }
 
-interface GenerationParams {
+interface GenerationParams extends Prisma.JsonObject {
   image_size?: 'landscape_4_3' | 'portrait_4_3' | 'square';
   num_inference_steps?: number;
   guidance_scale?: number;
   num_images?: number;
+  [key: string]: Prisma.JsonValue | undefined;
 }
 
 interface FalResponse {
@@ -159,6 +160,13 @@ export class GenerationService {
 
         // Update database only if we have a valid image
         if (generatedImageUrl) {
+          const metadata: Prisma.JsonObject = {
+            falRequestId: falRequestId || '',
+            inferenceTime: response.data.timings?.inference || null,
+            hasNsfw: response.data.has_nsfw_concepts?.[0] || false,
+            params: {...generationParams}
+          };
+
           await prisma.user.update({
             where: { id: userId },
             data: {
@@ -171,12 +179,7 @@ export class GenerationService {
                   imageUrl: generatedImageUrl,
                   seed: seed ? BigInt(seed) : null,
                   starsUsed: 1,
-                  metadata: {
-                    falRequestId: falRequestId || '',
-                    inferenceTime: response.data.timings?.inference,
-                    hasNsfw: response.data.has_nsfw_concepts?.[0] || false,
-                    params: generationParams
-                  } as Prisma.JsonObject
+                  metadata
                 }
               }
             }
