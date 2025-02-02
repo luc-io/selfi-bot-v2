@@ -32,11 +32,14 @@ composer.command('gen', async (ctx) => {
 
     await ctx.reply('🎨 Generating your image...');
 
-    const { imageUrl } = await GenerationService.generate(user.id, {
+    const { imageUrls } = await GenerationService.generate(user.id, {
       prompt,
     });
 
-    await ctx.replyWithPhoto(imageUrl);
+    // Send each generated image
+    for (const imageUrl of imageUrls) {
+      await ctx.replyWithPhoto(imageUrl);
+    }
   } catch (error: any) {
     const errorMessage = error.message || 'Unknown error';
     logger.error({ 
