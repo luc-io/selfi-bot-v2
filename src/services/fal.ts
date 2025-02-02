@@ -1,5 +1,12 @@
 import { logger } from '../logger';
 
+export interface FalGenerationParams {
+  image_size?: string;
+  guidance_scale?: number;
+  num_inference_steps?: number;
+  num_images?: number;
+}
+
 interface FalGenerationResponse {
   seed: number;
   images: Array<{
@@ -15,6 +22,13 @@ interface FalGenerationResponse {
   has_nsfw_concepts: boolean[];
 }
 
+const DEFAULT_PARAMS: FalGenerationParams = {
+  image_size: 'landscape_4_3',
+  guidance_scale: 3.5,
+  num_inference_steps: 28,
+  num_images: 1
+};
+
 export class FalService {
   private readonly apiKey: string;
   private readonly apiSecret: string;
@@ -24,8 +38,23 @@ export class FalService {
     this.apiSecret = apiSecret;
   }
 
-  public async generateImage(prompt: string, negativePrompt?: string): Promise<string> {
+  public async generateImage(
+    prompt: string, 
+    negativePrompt?: string,
+    params: Partial<FalGenerationParams> = {}
+  ): Promise<string> {
     try {
+      const generationParams = {
+        ...DEFAULT_PARAMS,
+        ...params
+      };
+
+      logger.info({ 
+        prompt, 
+        negativePrompt, 
+        params: generationParams 
+      }, 'Generating image with parameters');
+
       const result = await fetch('https://queue.fal.run/fal-ai/flux-lora/subscribe', {
         method: 'POST',
         headers: {
@@ -36,10 +65,7 @@ export class FalService {
           input: {
             prompt,
             negative_prompt: negativePrompt,
-            image_size: 'landscape_4_3',
-            guidance_scale: 3.5,
-            num_inference_steps: 28,
-            num_images: 1
+            ...generationParams
           }
         }),
       });
