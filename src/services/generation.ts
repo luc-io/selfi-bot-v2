@@ -1,5 +1,5 @@
 import { fal } from '@fal-ai/client';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { config } from '../config.js';
 import { logger } from '../lib/logger.js';
 
@@ -28,6 +28,13 @@ interface FalRequest {
   num_images?: number;
 }
 
+interface GenerationParams {
+  image_size?: 'landscape_4_3' | 'portrait_4_3' | 'square';
+  num_inference_steps?: number;
+  guidance_scale?: number;
+  num_images?: number;
+}
+
 interface FalResponse {
   data: {
     images: Array<{
@@ -47,7 +54,7 @@ interface FalResponse {
 }
 
 // Default parameters if none are saved
-const DEFAULT_PARAMS = {
+const DEFAULT_PARAMS: GenerationParams = {
   image_size: 'landscape_4_3',
   num_inference_steps: 28,
   guidance_scale: 3.5,
@@ -75,8 +82,8 @@ export class GenerationService {
       }
 
       // Get user's saved parameters or use defaults
-      const userParams = user.parameters?.params || {};
-      const generationParams = {
+      const userParams = user.parameters?.params as GenerationParams || {};
+      const generationParams: GenerationParams = {
         ...DEFAULT_PARAMS,
         ...userParams,
       };
