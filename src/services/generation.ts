@@ -16,6 +16,11 @@ interface GenerationOptions {
   seed?: number;
 }
 
+interface GenerationResult {
+  imageUrl: string;
+  seed: number;
+}
+
 interface FalRequest {
   prompt: string;
   negative_prompt?: string;
@@ -46,7 +51,7 @@ interface FalResponse {
 }
 
 export class GenerationService {
-  static async generate(userId: string, options: GenerationOptions) {
+  static async generate(userId: string, options: GenerationOptions): Promise<GenerationResult> {
     const { prompt, negativePrompt, loraPath, loraScale = 0.8, seed } = options;
 
     try {
@@ -57,7 +62,7 @@ export class GenerationService {
           id: true,
           stars: true,
           telegramId: true,
-          parameters: true  // Include user parameters
+          parameters: true  // Include parameters to get user settings
         }
       });
 
@@ -80,14 +85,6 @@ export class GenerationService {
           ...userParams
         };
 
-        // Log the request parameters
-        logger.info({ 
-          userId: user.telegramId,
-          requestParams,
-          prompt,
-          seed
-        }, 'Starting generation with parameters');
-
         // Generate image using flux-lora model
         const falResult = await fal.subscribe('fal-ai/flux-lora', {
           input: requestParams as FalRequest,
@@ -106,15 +103,6 @@ export class GenerationService {
         const response = falResult as unknown as FalResponse;
         falRequestId = response.requestId;
 
-        // Log the full response including the seed that was used
-        logger.info({ 
-          requestId: falRequestId,
-          prompt,
-          requestedSeed: seed,
-          usedSeed: response.data.seed,
-          userId: user.telegramId 
-        }, 'Generation completed with seed');
-        
         if (!response?.data?.images?.length) {
           throw new Error('No images in response');
         }
@@ -158,9 +146,7 @@ export class GenerationService {
                   metadata: {
                     falRequestId,
                     inferenceTime: response.data.timings?.inference,
-                    hasNsfw: response.data.has_nsfw_concepts?.[0] || false,
-                    requestedSeed: seed,  // Store requested seed
-                    usedSeed: response.data.seed  // Store actual seed used
+                    hasNsfw: response.data.has_nsfw_concepts?.[0] || false
                   }
                 }
               }
@@ -170,14 +156,16 @@ export class GenerationService {
           logger.info({ 
             imageUrl: generatedImageUrl,
             prompt,
+            seed: response.data.seed,
             falRequestId,
-            requestedSeed: seed,
-            usedSeed: response.data.seed,
             timing: response.data.timings?.inference,
             userId: user.telegramId
-          }, 'Image saved with seed information');
+          }, 'Generation succeeded');
 
-          return { imageUrl: generatedImageUrl };
+          return { 
+            imageUrl: generatedImageUrl,
+            seed: response.data.seed  // Return the seed used
+          };
         } else {
           throw new Error('Failed to get image URL from response');
         }
