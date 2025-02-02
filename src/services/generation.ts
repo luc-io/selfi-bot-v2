@@ -142,28 +142,38 @@ export class GenerationService {
         }
 
         // Update database only if we have a valid image
-        if (generatedImageUrl) {
-          await prisma.user.update({
-            where: { id: userId },
-            data: {
-              stars: { decrement: 1 },
-              generations: {
-                create: {
-                  baseModelId: baseModel.id,
-                  prompt,
-                  negativePrompt,
-                  imageUrl: generatedImageUrl,
-                  seed: generatedSeed ? Number(generatedSeed) : null,  // Convert to regular number
-                  starsUsed: 1,
-                  metadata: {
-                    falRequestId,
-                    inferenceTime: response.data.timings?.inference,
-                    hasNsfw: response.data.has_nsfw_concepts?.[0] || false
+        if (generatedImageUrl && generatedSeed) {
+          try {
+            await prisma.user.update({
+              where: { id: userId },
+              data: {
+                stars: { decrement: 1 },
+                generations: {
+                  create: {
+                    baseModelId: baseModel.id,
+                    prompt,
+                    negativePrompt,
+                    imageUrl: generatedImageUrl,
+                    seed: generatedSeed ? BigInt(Math.floor(generatedSeed)) : null,  // Properly convert to BigInt
+                    starsUsed: 1,
+                    metadata: {
+                      falRequestId,
+                      inferenceTime: response.data.timings?.inference,
+                      hasNsfw: response.data.has_nsfw_concepts?.[0] || false
+                    }
                   }
                 }
               }
-            }
-          });
+            });
+          } catch (dbError) {
+            // Log database error but don't fail the request
+            logger.error({
+              error: dbError,
+              prompt,
+              generatedSeed,
+              userId: user.telegramId
+            }, 'Database update failed but image was generated');
+          }
 
           logger.info({ 
             imageUrl: generatedImageUrl,
@@ -179,18 +189,18 @@ export class GenerationService {
             seed: generatedSeed
           };
         } else {
-          throw new Error('Failed to get image URL from response');
+          throw new Error('Failed to get image URL or seed from response');
         }
 
       } catch (falError: any) {
-        // If we got the image but database update failed, still return the image
-        if (generatedImageUrl && generatedSeed) {
+        // If we got the image but had other errors, still return the image
+        if (generatedImageUrl && generatedSeed !== null) {
           logger.error({ 
             error: falError.message,
             prompt,
             falRequestId,
             userId: user.telegramId,
-            detail: "Database update failed but image was generated"
+            detail: "API error but image was generated"
           }, 'Partial generation success');
           
           return {
