@@ -1,5 +1,5 @@
 import { fal } from '@fal-ai/client';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { config } from '../config.js';
 import { logger } from '../lib/logger.js';
 
@@ -25,15 +25,6 @@ interface FalRequest {
   image_size?: 'landscape_4_3' | 'portrait_4_3' | 'square' | { width: number; height: number };
   num_inference_steps?: number;
   guidance_scale?: number;
-  num_images?: number;
-}
-
-interface GenerationParams extends Prisma.JsonObject {
-  image_size?: 'landscape_4_3' | 'portrait_4_3' | 'square';
-  num_inference_steps?: number;
-  guidance_scale?: number;
-  num_images?: number;
-  [key: string]: Prisma.JsonValue | undefined;
 }
 
 interface FalResponse {
@@ -54,31 +45,19 @@ interface FalResponse {
   requestId: string;
 }
 
-// Default parameters if none are saved
-const DEFAULT_PARAMS: GenerationParams = {
-  image_size: 'landscape_4_3',
-  num_inference_steps: 28,
-  guidance_scale: 3.5,
-  num_images: 1,
-};
-
-interface GenerationResult {
-  imageUrls: string[];
-}
-
 export class GenerationService {
-  static async generate(userId: string, options: GenerationOptions): Promise<GenerationResult> {
+  static async generate(userId: string, options: GenerationOptions) {
     const { prompt, negativePrompt, loraPath, loraScale = 0.8, seed } = options;
 
     try {
-      // First check user's stars balance and get telegramId, and parameters
+      // First check user's stars balance and get telegramId
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: {
           id: true,
           stars: true,
           telegramId: true,
-          parameters: true  // Include saved parameters
+          parameters: true  // Include user parameters
         }
       });
 
@@ -86,34 +65,32 @@ export class GenerationService {
         throw new Error('Insufficient stars balance');
       }
 
-      // Get user's saved parameters or use defaults
-      const userParams = user.parameters?.params as GenerationParams || {};
-      const generationParams: GenerationParams = {
-        ...DEFAULT_PARAMS,
-        ...userParams,
-      };
-
-      // Log the parameters being used
-      logger.info({
-        userId: user.telegramId,
-        userParams,
-        finalParams: generationParams
-      }, 'Using generation parameters');
-
-      let generatedImageUrls: string[] = [];
+      let generatedImageUrl: string | null = null;
       let falRequestId: string | null = null;
 
       try {
-        // Generate image using flux-lora model with user parameters
+        // Get user parameters or use defaults
+        const userParams = user.parameters?.params || {};
+        const requestParams = {
+          prompt,
+          negative_prompt: negativePrompt,
+          lora_path: loraPath,
+          lora_scale: loraScale,
+          seed,
+          ...userParams
+        };
+
+        // Log the request parameters
+        logger.info({ 
+          userId: user.telegramId,
+          requestParams,
+          prompt,
+          seed
+        }, 'Starting generation with parameters');
+
+        // Generate image using flux-lora model
         const falResult = await fal.subscribe('fal-ai/flux-lora', {
-          input: {
-            prompt,
-            negative_prompt: negativePrompt,
-            lora_path: loraPath,
-            lora_scale: loraScale,
-            seed,
-            ...generationParams  // Use saved or default parameters
-          } as FalRequest,
+          input: requestParams as FalRequest,
           pollInterval: 1000,
           logs: true,
           onQueueUpdate: (update: { status: string; position?: number }) => {
@@ -126,21 +103,23 @@ export class GenerationService {
           },
         });
 
-        // Log the full FAL response
-        logger.info({ 
-          falResponse: falResult,
-          prompt,
-          userId: user.telegramId 
-        }, 'FAL API Response');
-
         const response = falResult as unknown as FalResponse;
         falRequestId = response.requestId;
+
+        // Log the full response including the seed that was used
+        logger.info({ 
+          requestId: falRequestId,
+          prompt,
+          requestedSeed: seed,
+          usedSeed: response.data.seed,
+          userId: user.telegramId 
+        }, 'Generation completed with seed');
         
         if (!response?.data?.images?.length) {
           throw new Error('No images in response');
         }
 
-        generatedImageUrls = response.data.images.map(image => image.url);
+        generatedImageUrl = response.data.images[0].url;
 
         // Get or create the base model
         let baseModel = await prisma.baseModel.findFirst({
@@ -162,48 +141,45 @@ export class GenerationService {
           });
         }
 
-        // Create a generation record for each image
-        if (generatedImageUrls.length > 0) {
-          const metadata: Prisma.JsonObject = {
-            falRequestId: falRequestId || '',
-            inferenceTime: response.data.timings?.inference || null,
-            hasNsfw: response.data.has_nsfw_concepts?.[0] || false,
-            params: {...generationParams}
-          };
-
-          // Create generation records for all images in parallel
-          await Promise.all(generatedImageUrls.map(imageUrl => 
-            prisma.user.update({
-              where: { id: userId },
-              data: {
-                stars: { decrement: 1 },
-                generations: {
-                  create: {
-                    baseModelId: baseModel.id,
-                    prompt,
-                    negativePrompt,
-                    imageUrl,
-                    seed: seed ? BigInt(seed) : null,
-                    starsUsed: 1,
-                    metadata
+        // Update database only if we have a valid image
+        if (generatedImageUrl) {
+          await prisma.user.update({
+            where: { id: userId },
+            data: {
+              stars: { decrement: 1 },
+              generations: {
+                create: {
+                  baseModelId: baseModel.id,
+                  prompt,
+                  negativePrompt,
+                  imageUrl: generatedImageUrl,
+                  seed: response.data.seed ? BigInt(response.data.seed) : null,
+                  starsUsed: 1,
+                  metadata: {
+                    falRequestId,
+                    inferenceTime: response.data.timings?.inference,
+                    hasNsfw: response.data.has_nsfw_concepts?.[0] || false,
+                    requestedSeed: seed,  // Store requested seed
+                    usedSeed: response.data.seed  // Store actual seed used
                   }
                 }
               }
-            })
-          ));
+            }
+          });
 
           logger.info({ 
-            imageUrls: generatedImageUrls,
+            imageUrl: generatedImageUrl,
             prompt,
             falRequestId,
+            requestedSeed: seed,
+            usedSeed: response.data.seed,
             timing: response.data.timings?.inference,
-            userId: user.telegramId,
-            params: generationParams
-          }, 'Generation succeeded');
+            userId: user.telegramId
+          }, 'Image saved with seed information');
 
-          return { imageUrls: generatedImageUrls };
+          return { imageUrl: generatedImageUrl };
         } else {
-          throw new Error('Failed to get image URLs from response');
+          throw new Error('Failed to get image URL from response');
         }
 
       } catch (falError: any) {
