@@ -1,5 +1,5 @@
 import { fal } from '@fal-ai/client';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { config } from '../config.js';
 import { logger } from '../lib/logger.js';
 
@@ -19,6 +19,16 @@ interface GenerationOptions {
 interface GenerationResult {
   imageUrl: string;
   seed: number;
+}
+
+interface UserParams {
+  image_size?: string;
+  num_inference_steps?: number;
+  guidance_scale?: number;
+  num_images?: number;
+  enable_safety_checker?: boolean;
+  output_format?: string;
+  [key: string]: any;
 }
 
 interface FalRequest {
@@ -75,7 +85,7 @@ export class GenerationService {
 
       try {
         // Get user parameters or use defaults
-        const userParams = user.parameters?.params || {};
+        const userParams = (user.parameters?.params || {}) as UserParams;
         const requestParams = {
           prompt,
           negative_prompt: negativePrompt,
