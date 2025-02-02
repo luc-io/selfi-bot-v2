@@ -32,14 +32,12 @@ composer.command('gen', async (ctx) => {
 
     await ctx.reply('🎨 Generating your image...');
 
-    const { imageUrls } = await GenerationService.generate(user.id, {
+    const { imageUrl, seed } = await GenerationService.generate(user.id, {
       prompt,
     });
 
-    // Send each generated image
-    for (const imageUrl of imageUrls) {
-      await ctx.replyWithPhoto(imageUrl);
-    }
+    await ctx.replyWithPhoto(imageUrl);
+    await ctx.reply(`🎲 Seed: ${seed}\nUse this seed to recreate the same image!`);
   } catch (error: any) {
     const errorMessage = error.message || 'Unknown error';
     logger.error({ 
