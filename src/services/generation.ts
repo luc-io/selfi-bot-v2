@@ -60,6 +60,10 @@ interface FalResponse {
   requestId: string;
 }
 
+function normalizeSeed(seed: number): number {
+  return seed % 10000000;  // Keep only the last 7 digits
+}
+
 export class GenerationService {
   static async generate(userId: string, options: GenerationOptions): Promise<GenerationResult> {
     const { prompt, negativePrompt, loraPath, loraScale = 0.8, seed } = options;
@@ -113,7 +117,7 @@ export class GenerationService {
 
         const response = falResult as unknown as FalResponse;
         falRequestId = response.requestId;
-        generatedSeed = response.data.seed;
+        generatedSeed = normalizeSeed(response.data.seed);  // Normalize the seed
 
         if (!response?.data?.images?.length) {
           throw new Error('No images in response');
@@ -142,7 +146,7 @@ export class GenerationService {
         }
 
         // Update database only if we have a valid image
-        if (generatedImageUrl && generatedSeed) {
+        if (generatedImageUrl && generatedSeed !== null) {
           try {
             await prisma.user.update({
               where: { id: userId },
@@ -154,7 +158,7 @@ export class GenerationService {
                     prompt,
                     negativePrompt,
                     imageUrl: generatedImageUrl,
-                    seed: generatedSeed ? BigInt(Math.floor(generatedSeed)) : null,  // Properly convert to BigInt
+                    seed: generatedSeed ? BigInt(generatedSeed) : null,
                     starsUsed: 1,
                     metadata: {
                       falRequestId,
