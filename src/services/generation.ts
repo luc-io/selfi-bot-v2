@@ -25,6 +25,7 @@ interface FalRequest {
   image_size?: 'landscape_4_3' | 'portrait_4_3' | 'square' | { width: number; height: number };
   num_inference_steps?: number;
   guidance_scale?: number;
+  num_images?: number;
 }
 
 interface FalResponse {
@@ -45,18 +46,27 @@ interface FalResponse {
   requestId: string;
 }
 
+// Default parameters if none are saved
+const DEFAULT_PARAMS = {
+  image_size: 'landscape_4_3',
+  num_inference_steps: 28,
+  guidance_scale: 3.5,
+  num_images: 1,
+};
+
 export class GenerationService {
   static async generate(userId: string, options: GenerationOptions) {
     const { prompt, negativePrompt, loraPath, loraScale = 0.8, seed } = options;
 
     try {
-      // First check user's stars balance and get telegramId
+      // First check user's stars balance and get telegramId, and parameters
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: {
           id: true,
           stars: true,
-          telegramId: true
+          telegramId: true,
+          parameters: true  // Include saved parameters
         }
       });
 
@@ -64,11 +74,25 @@ export class GenerationService {
         throw new Error('Insufficient stars balance');
       }
 
+      // Get user's saved parameters or use defaults
+      const userParams = user.parameters?.params || {};
+      const generationParams = {
+        ...DEFAULT_PARAMS,
+        ...userParams,
+      };
+
+      // Log the parameters being used
+      logger.info({
+        userId: user.telegramId,
+        userParams,
+        finalParams: generationParams
+      }, 'Using generation parameters');
+
       let generatedImageUrl: string | null = null;
       let falRequestId: string | null = null;
 
       try {
-        // Generate image using flux-lora model
+        // Generate image using flux-lora model with user parameters
         const falResult = await fal.subscribe('fal-ai/flux-lora', {
           input: {
             prompt,
@@ -76,9 +100,7 @@ export class GenerationService {
             lora_path: loraPath,
             lora_scale: loraScale,
             seed,
-            image_size: 'landscape_4_3',
-            num_inference_steps: 28,
-            guidance_scale: 3.5,
+            ...generationParams  // Use saved or default parameters
           } as FalRequest,
           pollInterval: 1000,
           logs: true,
@@ -145,7 +167,8 @@ export class GenerationService {
                   metadata: {
                     falRequestId,
                     inferenceTime: response.data.timings?.inference,
-                    hasNsfw: response.data.has_nsfw_concepts?.[0] || false
+                    hasNsfw: response.data.has_nsfw_concepts?.[0] || false,
+                    params: generationParams  // Save the parameters used
                   }
                 }
               }
@@ -157,7 +180,8 @@ export class GenerationService {
             prompt,
             falRequestId,
             timing: response.data.timings?.inference,
-            userId: user.telegramId
+            userId: user.telegramId,
+            params: generationParams
           }, 'Generation succeeded');
 
           return { imageUrl: generatedImageUrl };
