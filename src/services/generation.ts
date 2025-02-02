@@ -82,6 +82,7 @@ export class GenerationService {
 
       let generatedImageUrl: string | null = null;
       let falRequestId: string | null = null;
+      let generatedSeed: number | null = null;
 
       try {
         // Get user parameters or use defaults
@@ -112,6 +113,7 @@ export class GenerationService {
 
         const response = falResult as unknown as FalResponse;
         falRequestId = response.requestId;
+        generatedSeed = response.data.seed;
 
         if (!response?.data?.images?.length) {
           throw new Error('No images in response');
@@ -151,7 +153,7 @@ export class GenerationService {
                   prompt,
                   negativePrompt,
                   imageUrl: generatedImageUrl,
-                  seed: response.data.seed ? BigInt(response.data.seed) : null,
+                  seed: generatedSeed ? Number(generatedSeed) : null,  // Convert to regular number
                   starsUsed: 1,
                   metadata: {
                     falRequestId,
@@ -166,7 +168,7 @@ export class GenerationService {
           logger.info({ 
             imageUrl: generatedImageUrl,
             prompt,
-            seed: response.data.seed,
+            seed: generatedSeed,
             falRequestId,
             timing: response.data.timings?.inference,
             userId: user.telegramId
@@ -174,13 +176,29 @@ export class GenerationService {
 
           return { 
             imageUrl: generatedImageUrl,
-            seed: response.data.seed  // Return the seed used
+            seed: generatedSeed
           };
         } else {
           throw new Error('Failed to get image URL from response');
         }
 
       } catch (falError: any) {
+        // If we got the image but database update failed, still return the image
+        if (generatedImageUrl && generatedSeed) {
+          logger.error({ 
+            error: falError.message,
+            prompt,
+            falRequestId,
+            userId: user.telegramId,
+            detail: "Database update failed but image was generated"
+          }, 'Partial generation success');
+          
+          return {
+            imageUrl: generatedImageUrl,
+            seed: generatedSeed
+          };
+        }
+
         logger.error({ 
           error: falError.message,
           prompt,
