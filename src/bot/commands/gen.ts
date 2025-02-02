@@ -37,7 +37,7 @@ composer.command('gen', async (ctx) => {
     });
 
     await ctx.replyWithPhoto(imageUrl);
-    await ctx.reply(`🎲 Seed: ${seed}\nUse this seed to recreate the same image!`);
+    await ctx.reply(`Seed: ${seed}`);
   } catch (error: any) {
     const errorMessage = error.message || 'Unknown error';
     logger.error({ 
