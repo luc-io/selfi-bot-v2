@@ -1,5 +1,5 @@
-import { prisma } from './prisma';
-import { logger } from './logger';
+import { prisma } from './prisma.js';
+import { logger } from './logger.js';
 
 export async function getOrCreateUser(telegramId: string, username?: string) {
   try {
