@@ -1,4 +1,4 @@
-import { Bot } from 'grammy';
+import { Bot, BotConfig } from 'grammy';
 import { BotContext } from './types/bot.js';
 import { config } from './config.js';
 import { fastify } from 'fastify';
@@ -18,7 +18,7 @@ async function setupWebhook(bot: Bot<BotContext>): Promise<boolean> {
     const webhookUrl = 'https://selfi-dev.blackiris.art/bot';
     const webhookResponse = await bot.api.setWebhook(webhookUrl, {
       drop_pending_updates: true,
-      allowed_updates: ['message', 'callback_query', 'pre_checkout_query', 'successful_payment']
+      allowed_updates: ['message', 'callback_query', 'pre_checkout_query']
     });
 
     logger.info({ 
