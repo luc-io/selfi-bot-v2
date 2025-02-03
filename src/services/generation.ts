@@ -1,5 +1,4 @@
 import { fal } from '@fal-ai/client';
-import { PrismaClient } from '@prisma/client';
 import { config } from '../config.js';
 import { logger } from '../lib/logger.js';
 import { prisma } from '../lib/prisma.js';
@@ -13,6 +12,13 @@ interface GenerationOptions {
   loraPath?: string;
   loraScale?: number;
   seed?: number;
+  image_size?: string;
+  num_inference_steps?: number;
+  guidance_scale?: number;
+  num_images?: number;
+  sync_mode?: boolean;
+  enable_safety_checker?: boolean;
+  output_format?: 'jpeg' | 'png';
 }
 
 interface FalRequest {
@@ -21,9 +27,12 @@ interface FalRequest {
   lora_path?: string;
   lora_scale?: number;
   seed?: number;
-  image_size?: 'landscape_4_3' | 'portrait_4_3' | 'square' | { width: number; height: number };
+  image_size?: string;
   num_inference_steps?: number;
   guidance_scale?: number;
+  output_format?: string;
+  sync_mode?: boolean;
+  enable_safety_checker?: boolean;
 }
 
 interface FalResponse {
@@ -44,18 +53,26 @@ interface FalResponse {
   requestId: string;
 }
 
+const defaultParams = {
+  image_size: 'landscape_4_3',
+  num_inference_steps: 28,
+  guidance_scale: 3.5,
+  num_images: 1,
+  sync_mode: false,
+  enable_safety_checker: true,
+  output_format: 'jpeg'
+};
+
 export class GenerationService {
   static async generate(telegramId: string, options: GenerationOptions) {
-    const { prompt, negativePrompt, loraPath, loraScale = 0.8, seed } = options;
+    const { prompt, negativePrompt, loraPath, loraScale = 0.8 } = options;
 
     try {
-      // First check user's stars balance using telegramId
+      // First check user's stars balance and get saved parameters
       const user = await prisma.user.findUnique({
         where: { telegramId },
-        select: {
-          databaseId: true,
-          stars: true,
-          telegramId: true
+        include: {
+          parameters: true
         }
       });
 
@@ -63,22 +80,24 @@ export class GenerationService {
         throw new Error('Insufficient stars balance');
       }
 
+      // Get user's saved parameters or use defaults
+      const savedParams = user.parameters?.params || {};
+      const generationParams = {
+        ...defaultParams,
+        ...savedParams,
+        prompt,
+        negative_prompt: negativePrompt,
+        lora_path: loraPath,
+        lora_scale: loraScale,
+      };
+
       let generatedImageUrl: string | null = null;
       let falRequestId: string | null = null;
 
       try {
-        // Generate image using flux-lora model
+        // Generate image using flux-lora model with parameters
         const falResult = await fal.subscribe('fal-ai/flux-lora', {
-          input: {
-            prompt,
-            negative_prompt: negativePrompt,
-            lora_path: loraPath,
-            lora_scale: loraScale,
-            seed,
-            image_size: 'landscape_4_3',
-            num_inference_steps: 28,
-            guidance_scale: 3.5,
-          } as FalRequest,
+          input: generationParams as FalRequest,
           pollInterval: 1000,
           logs: true,
           onQueueUpdate: (update: { status: string; position?: number }) => {
@@ -135,12 +154,21 @@ export class GenerationService {
                   prompt,
                   negativePrompt,
                   imageUrl: generatedImageUrl,
-                  seed: seed ? BigInt(seed) : null,
+                  seed: options.seed ? BigInt(options.seed) : null,
                   starsUsed: 1,
                   metadata: {
                     falRequestId,
                     inferenceTime: response.data.timings?.inference,
-                    hasNsfw: response.data.has_nsfw_concepts?.[0] || false
+                    hasNsfw: response.data.has_nsfw_concepts?.[0] || false,
+                    parameters: {
+                      image_size: generationParams.image_size,
+                      num_inference_steps: generationParams.num_inference_steps,
+                      guidance_scale: generationParams.guidance_scale,
+                      num_images: generationParams.num_images,
+                      sync_mode: generationParams.sync_mode,
+                      enable_safety_checker: generationParams.enable_safety_checker,
+                      output_format: generationParams.output_format
+                    }
                   }
                 }
               }
@@ -152,7 +180,8 @@ export class GenerationService {
             prompt,
             falRequestId,
             timing: response.data.timings?.inference,
-            telegramId: user.telegramId
+            telegramId: user.telegramId,
+            parameters: generationParams
           }, 'Generation succeeded');
 
           return { imageUrl: generatedImageUrl };
@@ -165,7 +194,8 @@ export class GenerationService {
           error: falError.message,
           prompt,
           falRequestId,
-          telegramId: user.telegramId
+          telegramId: user.telegramId,
+          parameters: generationParams
         }, 'FAL API Error');
         throw new Error(`Image generation failed: ${falError.message}`);
       }
