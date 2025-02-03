@@ -40,6 +40,7 @@ export const paramsRoutes: FastifyPluginAsync = async (fastify) => {
     // Cast parameters to Prisma.InputJsonValue to ensure type compatibility
     const jsonParams = parameters as Prisma.InputJsonValue;
 
+    // Update or create parameters
     const updatedParams = await prisma.userParameters.upsert({
       where: {
         userDatabaseId: user.databaseId
