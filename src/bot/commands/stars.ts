@@ -19,21 +19,21 @@ composer.command('stars', async (ctx) => {
       inline_keyboard: [
         [
           { 
-            text: '5 ⭐ - $0.99',
+            text: '5 ⭐ - 5 XTR',
             callback_data: 'buy_stars:5'
           },
           {
-            text: '20 ⭐ - $2.99',
+            text: '20 ⭐ - 20 XTR',
             callback_data: 'buy_stars:20'
           }
         ],
         [
           {
-            text: '50 ⭐ - $4.99',
+            text: '50 ⭐ - 50 XTR',
             callback_data: 'buy_stars:50'
           },
           {
-            text: '100 ⭐ - $7.99',
+            text: '100 ⭐ - 100 XTR',
             callback_data: 'buy_stars:100'
           }
         ]
@@ -57,10 +57,10 @@ composer.callbackQuery(/^buy_stars:(\d+)$/, async (ctx) => {
 
   const stars = parseInt(match[1], 10);
   const prices = {
-    5: 99,   // $0.99 in cents
-    20: 299, // $2.99 in cents
-    50: 499, // $4.99 in cents
-    100: 799 // $7.99 in cents
+    5: 5,     // 5 XTR
+    20: 20,   // 20 XTR
+    50: 50,   // 50 XTR
+    100: 100  // 100 XTR
   };
 
   const price = prices[stars as keyof typeof prices];
