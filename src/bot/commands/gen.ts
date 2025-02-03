@@ -7,6 +7,9 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 const composer = new Composer<BotContext>();
 
+// Track user generation states
+const generatingUsers = new Map<string, boolean>();
+
 composer.command('gen', async (ctx) => {
   const prompt = ctx.message?.text?.replace('/gen', '').trim();
   if (!prompt) {
@@ -19,10 +22,18 @@ composer.command('gen', async (ctx) => {
     return;
   }
 
+  const telegramId = ctx.from.id.toString();
+
+  // Check if user is already generating
+  if (generatingUsers.get(telegramId)) {
+    await ctx.reply('⏳ Please wait for your current generation to complete before starting a new one.');
+    return;
+  }
+
   try {
     // Check user stars balance
     const user = await prisma.user.findUnique({
-      where: { telegramId: ctx.from.id.toString() }
+      where: { telegramId }
     });
     
     if (!user?.stars || user.stars < 1) {
@@ -30,6 +41,8 @@ composer.command('gen', async (ctx) => {
       return;
     }
 
+    // Set user as generating
+    generatingUsers.set(telegramId, true);
     await ctx.reply('🎨 Generating your image...');
 
     const { imageUrl } = await GenerationService.generate(user.telegramId, {
@@ -42,9 +55,12 @@ composer.command('gen', async (ctx) => {
     logger.error({ 
       error: errorMessage,
       prompt,
-      telegramId: ctx.from.id.toString()
+      telegramId
     }, 'Generation command failed');
     await ctx.reply('Sorry, something went wrong while generating your image.');
+  } finally {
+    // Clear user generating state
+    generatingUsers.delete(telegramId);
   }
 });
 
