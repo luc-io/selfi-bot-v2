@@ -2,11 +2,10 @@ import { fal } from '@fal-ai/client';
 import { PrismaClient } from '@prisma/client';
 import { config } from '../config.js';
 import { logger } from '../lib/logger.js';
+import { prisma } from '../lib/prisma.js';
 
 // Initialize FAL client
 fal.config({ credentials: config.FAL_KEY });
-
-const prisma = new PrismaClient();
 
 interface GenerationOptions {
   prompt: string;
@@ -46,13 +45,13 @@ interface FalResponse {
 }
 
 export class GenerationService {
-  static async generate(userId: string, options: GenerationOptions) {
+  static async generate(telegramId: string, options: GenerationOptions) {
     const { prompt, negativePrompt, loraPath, loraScale = 0.8, seed } = options;
 
     try {
-      // First check user's stars balance and get telegramId
+      // First check user's stars balance using telegramId
       const user = await prisma.user.findUnique({
-        where: { id: userId },
+        where: { telegramId },
         select: {
           id: true,
           stars: true,
@@ -87,7 +86,7 @@ export class GenerationService {
               status: update.status,
               position: update.position,
               prompt,
-              userId: user.telegramId
+              telegramId: user.telegramId
             }, 'Generation queue update');
           },
         });
@@ -96,7 +95,7 @@ export class GenerationService {
         logger.info({ 
           falResponse: falResult,
           prompt,
-          userId: user.telegramId 
+          telegramId: user.telegramId 
         }, 'FAL API Response');
 
         const response = falResult as unknown as FalResponse;
@@ -111,19 +110,15 @@ export class GenerationService {
         // Get or create the base model
         let baseModel = await prisma.baseModel.findFirst({
           where: {
-            name: 'Flux',
-            type: 'FLUX',
-            isDefault: true
+            modelPath: 'fal-ai/flux-lora'
           }
         });
 
         if (!baseModel) {
           baseModel = await prisma.baseModel.create({
             data: {
-              name: 'Flux',
-              version: 'v1',
-              type: 'FLUX',
-              isDefault: true
+              modelPath: 'fal-ai/flux-lora',
+              costPerGeneration: 1
             }
           });
         }
@@ -131,7 +126,7 @@ export class GenerationService {
         // Update database only if we have a valid image
         if (generatedImageUrl) {
           await prisma.user.update({
-            where: { id: userId },
+            where: { telegramId },
             data: {
               stars: { decrement: 1 },
               generations: {
@@ -157,7 +152,7 @@ export class GenerationService {
             prompt,
             falRequestId,
             timing: response.data.timings?.inference,
-            userId: user.telegramId
+            telegramId: user.telegramId
           }, 'Generation succeeded');
 
           return { imageUrl: generatedImageUrl };
@@ -170,7 +165,7 @@ export class GenerationService {
           error: falError.message,
           prompt,
           falRequestId,
-          userId: user.telegramId
+          telegramId: user.telegramId
         }, 'FAL API Error');
         throw new Error(`Image generation failed: ${falError.message}`);
       }
@@ -180,7 +175,7 @@ export class GenerationService {
       logger.error({ 
         error: errorMessage,
         prompt,
-        userId 
+        telegramId
       }, 'Generation failed');
       throw new Error('Generation failed: ' + errorMessage);
     }
