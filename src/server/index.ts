@@ -1,7 +1,7 @@
 import { Bot, webhookCallback } from 'grammy';
 import { FastifyInstance } from 'fastify';
 import { BotContext } from '../types/bot.js';
-import { setupRoutes } from './routes';
+import { setupRoutes } from './routes/index.js';
 
 export function setupServer(app: FastifyInstance, bot: Bot<BotContext>) {
   // Register routes
