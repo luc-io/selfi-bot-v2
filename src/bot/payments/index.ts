@@ -6,8 +6,9 @@ import { logger } from '../../lib/logger.js';
 const composer = new Composer<BotContext>();
 
 // Handle pre-checkout queries
-composer.on(':pre_checkout_query', async (ctx) => {
-  if (!ctx.from) return;
+composer.on('pre_checkout_query', async (ctx) => {
+  if (!ctx.from || !ctx.preCheckoutQuery) return;
+  
   const telegramId = ctx.from.id.toString();
   const query = ctx.preCheckoutQuery;
 
@@ -44,7 +45,7 @@ composer.on(':pre_checkout_query', async (ctx) => {
 });
 
 // Handle successful payments
-composer.on(':successful_payment', async (ctx) => {
+composer.on('message:successful_payment', async (ctx) => {
   if (!ctx.from || !ctx.message?.successful_payment) return;
   
   const telegramId = ctx.from.id.toString();
