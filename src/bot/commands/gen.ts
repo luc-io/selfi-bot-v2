@@ -2,11 +2,15 @@ import { Composer } from 'grammy';
 import { BotContext } from '../../types/bot.js';
 import { GenerationService } from '../../services/generation.js';
 import { logger } from '../../lib/logger.js';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../lib/prisma.js';
+import { Ids } from '../../types/ids.js';
 
-const prisma = new PrismaClient();
 const composer = new Composer<BotContext>();
 
+/**
+ * /gen command - Generate an image from a text prompt
+ * Usage: /gen a majestic dragon
+ */
 composer.command('gen', async (ctx) => {
   const prompt = ctx.message?.text?.replace('/gen', '').trim();
   if (!prompt) {
@@ -19,7 +23,7 @@ composer.command('gen', async (ctx) => {
     return;
   }
 
-  const telegramId = ctx.from.id.toString();
+  const telegramId = Ids.telegram(ctx.from.id.toString());
 
   try {
     // Check user stars balance
@@ -34,7 +38,7 @@ composer.command('gen', async (ctx) => {
 
     await ctx.reply('🎨 Generating your image...');
 
-    // Pass telegramId instead of database ID
+    // Pass telegramId to generation service
     const { imageUrl } = await GenerationService.generate(telegramId, {
       prompt,
     });
@@ -45,7 +49,7 @@ composer.command('gen', async (ctx) => {
     logger.error({ 
       error: errorMessage,
       prompt,
-      userId: telegramId
+      telegramId
     }, 'Generation command failed');
     await ctx.reply('Sorry, something went wrong while generating your image.');
   }
