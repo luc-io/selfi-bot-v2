@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { prisma } from '../../lib/prisma.js';
+import { Prisma } from '@prisma/client';
 
 export const paramsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/parameters/:userId', async (request, reply) => {
@@ -8,7 +9,7 @@ export const paramsRoutes: FastifyPluginAsync = async (fastify) => {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: {
-        userParameters: true  // Changed from parameters to userParameters to match schema
+        userParameters: true
       }
     });
 
@@ -17,13 +18,13 @@ export const paramsRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     return reply.send({
-      parameters: user.userParameters?.params || {}  // Default to empty object if no parameters
+      parameters: user.userParameters?.params || {}
     });
   });
 
   fastify.put('/parameters/:userId', async (request, reply) => {
     const { userId } = request.params as { userId: string };
-    const parameters = request.body as Record<string, unknown>;
+    const parameters = request.body as Prisma.JsonValue;
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
