@@ -1,4 +1,49 @@
-// ... earlier imports remain the same
+import { fal } from '@fal-ai/client';
+import { PrismaClient } from '@prisma/client';
+import { config } from '../config.js';
+import { logger } from '../lib/logger.js';
+import { prisma } from '../lib/prisma.js';
+
+// Initialize FAL client
+fal.config({ credentials: config.FAL_KEY });
+
+// Type definitions
+interface GenerationOptions {
+  prompt: string;
+  negativePrompt?: string;
+  loraPath?: string;
+  loraScale?: number;
+  seed?: number;
+}
+
+interface FalRequest {
+  prompt: string;
+  negative_prompt?: string;
+  lora_path?: string;
+  lora_scale?: number;
+  seed?: number;
+  image_size?: 'landscape_4_3' | 'portrait_4_3' | 'square' | { width: number; height: number };
+  num_inference_steps?: number;
+  guidance_scale?: number;
+}
+
+interface FalResponse {
+  data: {
+    images: Array<{
+      url: string;
+      width: number;
+      height: number;
+      content_type: string;
+    }>;
+    prompt: string;
+    timings: {
+      inference: number;
+    };
+    seed: number;
+    has_nsfw_concepts: boolean[];
+  };
+  requestId: string;
+}
 
 export class GenerationService {
   static async generate(telegramId: string, options: GenerationOptions) {
@@ -42,7 +87,7 @@ export class GenerationService {
               status: update.status,
               position: update.position,
               prompt,
-              telegramId: user.telegramId  // Changed from userId
+              telegramId: user.telegramId
             }, 'Generation queue update');
           },
         });
@@ -51,7 +96,7 @@ export class GenerationService {
         logger.info({ 
           falResponse: falResult,
           prompt,
-          telegramId: user.telegramId  // Changed from userId
+          telegramId: user.telegramId
         }, 'FAL API Response');
 
         const response = falResult as unknown as FalResponse;
@@ -108,7 +153,7 @@ export class GenerationService {
             prompt,
             falRequestId,
             timing: response.data.timings?.inference,
-            telegramId: user.telegramId  // Changed from userId
+            telegramId: user.telegramId
           }, 'Generation succeeded');
 
           return { imageUrl: generatedImageUrl };
@@ -121,7 +166,7 @@ export class GenerationService {
           error: falError.message,
           prompt,
           falRequestId,
-          telegramId: user.telegramId  // Changed from userId
+          telegramId: user.telegramId
         }, 'FAL API Error');
         throw new Error(`Image generation failed: ${falError.message}`);
       }
@@ -131,7 +176,7 @@ export class GenerationService {
       logger.error({ 
         error: errorMessage,
         prompt,
-        telegramId  // Changed from userId
+        telegramId
       }, 'Generation failed');
       throw new Error('Generation failed: ' + errorMessage);
     }
