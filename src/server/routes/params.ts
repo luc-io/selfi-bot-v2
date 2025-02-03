@@ -1,14 +1,15 @@
 import { FastifyPluginAsync } from 'fastify';
 import { prisma } from '../../lib/prisma.js';
+import { Prisma } from '@prisma/client';
 
 export const paramsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/parameters/:userId', async (request, reply) => {
     const { userId } = request.params as { userId: string };
 
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { databaseId: userId },
       include: {
-        userParameters: true  // Changed from parameters to userParameters
+        parameters: true
       }
     });
 
@@ -17,7 +18,7 @@ export const paramsRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     return reply.send({
-      parameters: user.userParameters?.params || {}
+      parameters: user.parameters?.params || {}
     });
   });
 
@@ -26,9 +27,9 @@ export const paramsRoutes: FastifyPluginAsync = async (fastify) => {
     const parameters = request.body as Record<string, unknown>;
 
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { databaseId: userId },
       include: {
-        userParameters: true
+        parameters: true
       }
     });
 
@@ -39,14 +40,14 @@ export const paramsRoutes: FastifyPluginAsync = async (fastify) => {
     // Update or create parameters
     const updatedParams = await prisma.userParameters.upsert({
       where: {
-        userId: userId
+        userDatabaseId: userId
       },
       create: {
-        userId: userId,
-        params: parameters
+        userDatabaseId: userId,
+        params: parameters as Prisma.InputJsonValue
       },
       update: {
-        params: parameters
+        params: parameters as Prisma.InputJsonValue
       }
     });
 
