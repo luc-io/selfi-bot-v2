@@ -37,8 +37,8 @@ export const paramsRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(404).send({ error: 'User not found' });
     }
 
-    // Cast parameters to Prisma.JsonValue to ensure type compatibility
-    const jsonParams = parameters as Prisma.JsonValue;
+    // Cast parameters to Prisma.InputJsonValue for database write operations
+    const jsonParams = parameters as Prisma.InputJsonValue;
 
     // Update or create parameters
     const updatedParams = await prisma.userParameters.upsert({
