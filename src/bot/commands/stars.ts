@@ -1,4 +1,4 @@
-import { Composer, InvoiceLabeledPrice } from 'grammy';
+import { Composer } from 'grammy';
 import { BotContext } from '../../types/bot.js';
 import { getOrCreateUser } from '../../lib/user.js';
 import { logger } from '../../lib/logger.js';
@@ -67,7 +67,7 @@ composer.callbackQuery(/^buy_stars:(\d+)$/, async (ctx) => {
   if (!price) return;
 
   try {
-    const labeledPrice: InvoiceLabeledPrice[] = [{
+    const prices = [{
       label: `${stars} Stars`,
       amount: price
     }];
@@ -78,7 +78,7 @@ composer.callbackQuery(/^buy_stars:(\d+)$/, async (ctx) => {
       `Purchase ${stars} stars for image generation`, // description
       `stars_${stars}`, // payload
       'XTR', // currency
-      labeledPrice // prices
+      prices // prices
     );
     
     logger.info({ 
