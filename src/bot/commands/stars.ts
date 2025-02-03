@@ -1,4 +1,4 @@
-import { Composer } from 'grammy';
+import { Composer, InvoiceLabeledPrice } from 'grammy';
 import { BotContext } from '../../types/bot.js';
 import { getOrCreateUser } from '../../lib/user.js';
 import { logger } from '../../lib/logger.js';
@@ -7,13 +7,13 @@ const composer = new Composer<BotContext>();
 
 composer.command('stars', async (ctx) => {
   const telegramId = ctx.from?.id.toString();
-  if (!telegramId) {
+  if (!telegramId || !ctx.from) {
     await ctx.reply('Could not identify user');
     return;
   }
 
   try {
-    const user = await getOrCreateUser(telegramId, ctx.from.username ?? undefined);
+    const user = await getOrCreateUser(telegramId, ctx.from?.username ?? undefined);
 
     const inlineKeyboard = {
       inline_keyboard: [
@@ -57,27 +57,29 @@ composer.callbackQuery(/^buy_stars:(\d+)$/, async (ctx) => {
 
   const stars = parseInt(match[1], 10);
   const prices = {
-    5: 0.99,
-    20: 2.99,
-    50: 4.99,
-    100: 7.99
+    5: 99,   // $0.99 in cents
+    20: 299, // $2.99 in cents
+    50: 499, // $4.99 in cents
+    100: 799 // $7.99 in cents
   };
 
   const price = prices[stars as keyof typeof prices];
   if (!price) return;
 
   try {
-    const invoice = {
-      title: `${stars} Selfi Stars`,
-      description: `Purchase ${stars} stars for image generation`,
-      currency: 'XTR',
-      prices: [{ label: `${stars} Stars`, amount: Math.round(stars * 100) }],
-      payload: `stars_${stars}`
-    };
+    const labeledPrice: InvoiceLabeledPrice[] = [{
+      label: `${stars} Stars`,
+      amount: price
+    }];
 
     await ctx.answerCallbackQuery();
-    await ctx.reply(`Preparing payment for ${stars} stars...`);
-    await ctx.replyWithInvoice(invoice);
+    await ctx.replyWithInvoice(
+      `${stars} Selfi Stars`, // title
+      `Purchase ${stars} stars for image generation`, // description
+      `stars_${stars}`, // payload
+      'XTR', // currency
+      labeledPrice // prices
+    );
     
     logger.info({ 
       userId: ctx.from.id,
