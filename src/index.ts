@@ -15,13 +15,15 @@ async function setupWebhook(bot: Bot<BotContext>): Promise<boolean> {
     logger.info('Existing webhook deleted');
 
     // Try to set the webhook
-    const webhookResponse = await bot.api.setWebhook('https://qubot-e.blackiris.art/bot', {
-      drop_pending_updates: true
+    const webhookUrl = 'https://selfi-dev.blackiris.art/bot';
+    const webhookResponse = await bot.api.setWebhook(webhookUrl, {
+      drop_pending_updates: true,
+      allowed_updates: ['message', 'callback_query', 'pre_checkout_query', 'successful_payment']
     });
 
     logger.info({ 
       success: webhookResponse,
-      url: 'https://qubot-e.blackiris.art/bot'
+      url: webhookUrl
     }, 'Webhook setup attempt');
 
     // Verify webhook info
@@ -40,6 +42,11 @@ async function main() {
   const bot = new Bot<BotContext>(config.TELEGRAM_BOT_TOKEN);
   logger.info('Bot instance created');
 
+  // Add middleware
+  bot.api.config.use(autoRetry());
+  bot.api.config.use(parseMode('HTML'));
+  logger.info('Bot middleware configured');
+
   // Register commands
   bot.use(commands);
   logger.info('Bot commands registered');
@@ -55,8 +62,6 @@ async function main() {
     host: '0.0.0.0'
   });
   logger.info(`Server started on port ${config.PORT}`);
-
-  // Connect to database (this happens in prisma.ts)
 
   // Setup webhook
   const webhookSuccess = await setupWebhook(bot);
