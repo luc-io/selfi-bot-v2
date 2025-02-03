@@ -6,30 +6,15 @@ import { setupServer } from './server/index.js';
 import commands from './bot/commands/index.js';
 import { logger } from './lib/logger.js';
 import { autoRetry } from '@grammyjs/auto-retry';
-import { run } from '@grammyjs/runner';
 import { parseMode } from '@grammyjs/parse-mode';
 
 // Initialize bot
 const bot = new Bot<BotContext>(config.TELEGRAM_BOT_TOKEN);
 logger.info('Bot instance created');
 
-// Add auto-retry for better reliability
+// Add middleware
 bot.api.config.use(autoRetry());
-logger.info('Auto-retry middleware added');
-
-// Set HTML as default parse mode
 bot.api.config.use(parseMode('HTML'));
-logger.info('HTML parse mode set');
-
-// Add debug logging for commands
-bot.on('message', async (ctx, next) => {
-  logger.info({
-    from: ctx.from?.id,
-    text: ctx.message.text,
-    type: ctx.message.text?.startsWith('/') ? 'command' : 'message'
-  }, 'Message received');
-  await next();
-});
 
 // Register commands
 bot.use(commands);
@@ -46,14 +31,19 @@ await server.listen({
 });
 logger.info(`Server started on port ${config.PORT}`);
 
-// Start bot in long polling mode
-bot.start({
-  drop_pending_updates: true,
-  onStart: (botInfo) => {
-    logger.info({ botInfo }, 'Bot started successfully');
-  },
-});
-logger.info('Bot started in long polling mode');
+// First, delete any existing webhook
+await bot.api.deleteWebhook();
+logger.info('Existing webhook deleted');
+
+// Set new webhook URL
+const webhookUrl = `https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/setWebhook?url=https://qubot-e.blackiris.art/bot`;
+try {
+  const response = await fetch(webhookUrl);
+  const result = await response.json();
+  logger.info({ result }, 'Webhook setup response');
+} catch (error) {
+  logger.error({ error }, 'Failed to set webhook');
+}
 
 // Error handling
 bot.catch((err) => {
@@ -67,10 +57,8 @@ process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down');
   
   try {
-    if (config.PUBLIC_URL) {
-      await bot.api.deleteWebhook();
-      logger.info('Webhook deleted');
-    }
+    await bot.api.deleteWebhook();
+    logger.info('Webhook deleted');
     
     process.exit(0);
   } catch (error) {
