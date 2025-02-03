@@ -1,4 +1,5 @@
 import { fal } from '@fal-ai/client';
+import { FluxLoraInput } from '@fal-ai/client/dist/services/flux-lora';
 import { PrismaClient } from '@prisma/client';
 import { config } from '../config.js';
 import { logger } from '../lib/logger.js';
@@ -15,13 +16,18 @@ interface GenerationOptions {
   seed?: number;
 }
 
-interface FalRequest {
+type ImageSize = {
+  width: number;
+  height: number;
+}
+
+interface FalRequest extends Partial<FluxLoraInput> {
   prompt: string;
   negative_prompt?: string;
   lora_path?: string;
   lora_scale?: number;
   seed?: number;
-  image_size?: 'landscape_4_3' | 'portrait_4_3' | 'square' | { width: number; height: number };
+  image_size?: 'landscape_4_3' | 'portrait_4_3' | 'square' | ImageSize;
   num_inference_steps?: number;
   guidance_scale?: number;
 }
@@ -67,18 +73,20 @@ export class GenerationService {
       let falRequestId: string | null = null;
 
       try {
+        const generationParams: FalRequest = {
+          prompt,
+          negative_prompt: negativePrompt,
+          lora_path: loraPath,
+          lora_scale: loraScale,
+          seed,
+          image_size: 'landscape_4_3',
+          num_inference_steps: 28,
+          guidance_scale: 3.5,
+        };
+
         // Generate image using flux-lora model
         const falResult = await fal.subscribe('fal-ai/flux-lora', {
-          input: {
-            prompt,
-            negative_prompt: negativePrompt,
-            lora_path: loraPath,
-            lora_scale: loraScale,
-            seed,
-            image_size: 'landscape_4_3',
-            num_inference_steps: 28,
-            guidance_scale: 3.5,
-          } as FalRequest,
+          input: generationParams,
           pollInterval: 1000,
           logs: true,
           onQueueUpdate: (update: { status: string; position?: number }) => {
@@ -190,12 +198,10 @@ export class GenerationService {
     return prisma.generation.findMany({
       where: {
         user: { telegramId },
-        ...(lora
-          ? {
-              loraId: lora.databaseId,
-              baseModelId: lora.baseModelId,
-            }
-          : {}),
+        ...(lora && {
+          loraId: lora.databaseId,
+          baseModelId: lora.baseModelId,
+        }),
       },
       take: limit,
       skip: offset,
