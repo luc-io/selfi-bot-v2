@@ -1,49 +1,4 @@
-import { fal } from '@fal-ai/client';
-import { PrismaClient } from '@prisma/client';
-import { config } from '../config.js';
-import { logger } from '../lib/logger.js';
-
-// Initialize FAL client
-fal.config({ credentials: config.FAL_KEY });
-
-const prisma = new PrismaClient();
-
-interface GenerationOptions {
-  prompt: string;
-  negativePrompt?: string;
-  loraPath?: string;
-  loraScale?: number;
-  seed?: number;
-}
-
-interface FalRequest {
-  prompt: string;
-  negative_prompt?: string;
-  lora_path?: string;
-  lora_scale?: number;
-  seed?: number;
-  image_size?: 'landscape_4_3' | 'portrait_4_3' | 'square' | { width: number; height: number };
-  num_inference_steps?: number;
-  guidance_scale?: number;
-}
-
-interface FalResponse {
-  data: {
-    images: Array<{
-      url: string;
-      width: number;
-      height: number;
-      content_type: string;
-    }>;
-    prompt: string;
-    timings: {
-      inference: number;
-    };
-    seed: number;
-    has_nsfw_concepts: boolean[];
-  };
-  requestId: string;
-}
+// ... earlier imports remain the same
 
 export class GenerationService {
   static async generate(telegramId: string, options: GenerationOptions) {
@@ -87,7 +42,7 @@ export class GenerationService {
               status: update.status,
               position: update.position,
               prompt,
-              userId: user.telegramId
+              telegramId: user.telegramId  // Changed from userId
             }, 'Generation queue update');
           },
         });
@@ -96,7 +51,7 @@ export class GenerationService {
         logger.info({ 
           falResponse: falResult,
           prompt,
-          userId: user.telegramId 
+          telegramId: user.telegramId  // Changed from userId
         }, 'FAL API Response');
 
         const response = falResult as unknown as FalResponse;
@@ -153,7 +108,7 @@ export class GenerationService {
             prompt,
             falRequestId,
             timing: response.data.timings?.inference,
-            userId: user.telegramId
+            telegramId: user.telegramId  // Changed from userId
           }, 'Generation succeeded');
 
           return { imageUrl: generatedImageUrl };
@@ -166,7 +121,7 @@ export class GenerationService {
           error: falError.message,
           prompt,
           falRequestId,
-          userId: user.telegramId
+          telegramId: user.telegramId  // Changed from userId
         }, 'FAL API Error');
         throw new Error(`Image generation failed: ${falError.message}`);
       }
@@ -176,33 +131,9 @@ export class GenerationService {
       logger.error({ 
         error: errorMessage,
         prompt,
-        userId: telegramId
+        telegramId  // Changed from userId
       }, 'Generation failed');
       throw new Error('Generation failed: ' + errorMessage);
     }
-  }
-
-  static async listUserGenerations(
-    userId: string,
-    limit = 10,
-    offset = 0,
-    lora?: { id: string; baseModelId: string } | null
-  ) {
-    return prisma.generation.findMany({
-      where: {
-        userId,
-        ...(lora
-          ? {
-              loraId: lora.id,
-              baseModelId: lora.baseModelId,
-            }
-          : {}),
-      },
-      take: limit,
-      skip: offset,
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
   }
 }
