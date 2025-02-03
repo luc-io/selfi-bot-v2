@@ -53,7 +53,7 @@ export class GenerationService {
       const user = await prisma.user.findUnique({
         where: { telegramId },
         select: {
-          id: true,
+          databaseId: true,  // Changed from id to databaseId
           stars: true,
           telegramId: true
         }
@@ -131,7 +131,7 @@ export class GenerationService {
               stars: { decrement: 1 },
               generations: {
                 create: {
-                  baseModelId: baseModel.id,
+                  baseModelId: baseModel.databaseId,  // Changed from id to databaseId
                   prompt,
                   negativePrompt,
                   imageUrl: generatedImageUrl,
@@ -182,17 +182,17 @@ export class GenerationService {
   }
 
   static async listUserGenerations(
-    userId: string,
+    userId: string,  // This should be databaseId
     limit = 10,
     offset = 0,
-    lora?: { id: string; baseModelId: string } | null
+    lora?: { databaseId: string; baseModelId: string } | null  // Changed from id to databaseId
   ) {
     return prisma.generation.findMany({
       where: {
         userId,
         ...(lora
           ? {
-              loraId: lora.id,
+              loraId: lora.databaseId,
               baseModelId: lora.baseModelId,
             }
           : {}),
