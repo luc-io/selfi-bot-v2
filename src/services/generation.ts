@@ -3,16 +3,21 @@ import { PrismaClient } from '@prisma/client';
 import { config } from '../config.js';
 import { logger } from '../lib/logger.js';
 import { prisma } from '../lib/prisma.js';
+import { TelegramId, Ids } from '../types/ids.js';
 
-// Initialize FAL client
-fal.config({ credentials: config.FAL_KEY });
-
-// Type definitions
+/**
+ * Options for image generation
+ */
 interface GenerationOptions {
+  /** The text prompt describing the image to generate */
   prompt: string;
+  /** Optional negative prompt to guide what not to generate */
   negativePrompt?: string;
+  /** Optional path to a LoRA model */
   loraPath?: string;
+  /** Optional scale factor for LoRA influence (0-1) */
   loraScale?: number;
+  /** Optional seed for reproducible generations */
   seed?: number;
 }
 
@@ -46,7 +51,13 @@ interface FalResponse {
 }
 
 export class GenerationService {
-  static async generate(telegramId: string, options: GenerationOptions) {
+  /**
+   * Generate an image based on a text prompt
+   * @param telegramId - The Telegram user ID (e.g., "2061615306")
+   * @param options - Generation options including prompt and parameters
+   * @returns Promise containing the generated image URL
+   */
+  static async generate(telegramId: TelegramId, options: GenerationOptions) {
     const { prompt, negativePrompt, loraPath, loraScale = 0.8, seed } = options;
 
     try {
