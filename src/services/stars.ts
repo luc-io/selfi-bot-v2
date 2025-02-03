@@ -1,27 +1,64 @@
 import { prisma } from '../lib/prisma.js';
 import { logger } from '../lib/logger.js';
 
-export type StarTransactionType = 'GENERATION' | 'TRAINING' | 'PURCHASE' | 'REFUND' | 'ADMIN_GRANT';
-
-interface StarTransaction {
-  userId: string;
+export interface StarsTransaction {
   amount: number;
-  type: StarTransactionType;
+  type: 'GENERATION' | 'TRAINING' | 'PURCHASE' | 'REFUND' | 'ADMIN_GRANT';
   metadata?: Record<string, unknown>;
 }
 
 export class StarsService {
-  /**
-   * Add or remove stars from a user's balance
-   */
-  static async updateStars(telegramId: string, amount: number, type: StarTransactionType, metadata?: Record<string, unknown>) {
+  static async updateStars(telegramId: string, transaction: StarsTransaction) {
+    try {
+      const { amount, type, metadata } = transaction;
+
+      const [user, transactionRecord] = await prisma.$transaction([
+        // Update user stars
+        prisma.user.update({
+          where: { telegramId },
+          data: {
+            stars: { increment: amount },
+            totalSpentStars: amount < 0 ? { increment: Math.abs(amount) } : undefined,
+            totalBoughtStars: amount > 0 && type === 'PURCHASE' ? { increment: amount } : undefined
+          }
+        }),
+        // Create transaction record
+        prisma.starTransaction.create({
+          data: {
+            user: { connect: { telegramId } },
+            amount,
+            type,
+            metadata: metadata || {}
+          }
+        })
+      ]);
+
+      logger.info({
+        telegramId,
+        amount,
+        type,
+        newBalance: user.stars
+      }, 'Stars updated successfully');
+
+      return { user, transaction: transactionRecord };
+    } catch (error) {
+      logger.error('Error updating stars:', error);
+      throw error;
+    }
+  }
+
+  static async getBalance(telegramId: string) {
     try {
       const user = await prisma.user.findUnique({
         where: { telegramId },
         select: {
-          databaseId: true,
-          telegramId: true,
-          stars: true
+          stars: true,
+          totalSpentStars: true,
+          totalBoughtStars: true,
+          starTransactions: {
+            take: 10,
+            orderBy: { createdAt: 'desc' }
+          }
         }
       });
 
@@ -29,111 +66,51 @@ export class StarsService {
         throw new Error('User not found');
       }
 
-      // Check for negative balance if removing stars
-      if (amount < 0 && (user.stars + amount) < 0) {
-        throw new Error('Insufficient stars balance');
-      }
-
-      // Update user balance and create transaction record
-      const [updatedUser, transaction] = await prisma.$transaction([
-        prisma.user.update({
-          where: { telegramId },
-          data: {
-            stars: {
-              increment: amount
-            }
-          }
-        }),
-        prisma.starTransaction.create({
-          data: {
-            amount,
-            type,
-            metadata,
-            user: {
-              connect: {
-                telegramId
-              }
-            }
-          }
-        })
-      ]);
-
-      logger.info({
-        telegramId,
-        type,
-        amount,
-        newBalance: updatedUser.stars
-      }, 'Stars balance updated');
-
-      return {
-        user: updatedUser,
-        transaction
-      };
+      return user;
     } catch (error) {
-      logger.error({
-        error,
-        telegramId,
-        amount,
-        type
-      }, 'Failed to update stars');
+      logger.error('Error getting stars balance:', error);
       throw error;
     }
   }
 
-  /**
-   * Check if a user has enough stars for an operation
-   */
-  static async hasEnoughStars(telegramId: string, required: number): Promise<boolean> {
-    const user = await prisma.user.findUnique({
-      where: { telegramId },
-      select: { stars: true }
-    });
+  static async checkBalance(telegramId: string, required: number) {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { telegramId },
+        select: { stars: true }
+      });
 
-    // If user doesn't exist or stars is undefined, they don't have enough stars
-    if (!user?.stars) {
-      return false;
+      if (!user) {
+        logger.warn({ telegramId }, 'User not found when checking balance');
+        return false;
+      }
+
+      return user.stars >= required;
+    } catch (error) {
+      logger.error('Error checking stars balance:', error);
+      throw error;
     }
-
-    return user.stars >= required;
   }
 
-  /**
-   * Get a user's current star balance
-   */
-  static async getBalance(telegramId: string): Promise<number> {
-    const user = await prisma.user.findUnique({
-      where: { telegramId },
-      select: { stars: true }
-    });
-
-    if (!user) {
-      throw new Error('User not found');
+  static async getTopSpenders(limit = 10) {
+    try {
+      return prisma.user.findMany({
+        where: {
+          totalSpentStars: { gt: 0 }
+        },
+        select: {
+          telegramId: true,
+          username: true,
+          totalSpentStars: true
+        },
+        orderBy: {
+          totalSpentStars: 'desc'
+        },
+        take: limit
+      });
+    } catch (error) {
+      logger.error('Error getting top spenders:', error);
+      throw error;
     }
-
-    return user.stars ?? 0;
-  }
-
-  /**
-   * Get a list of a user's star transactions
-   */
-  static async getTransactions(telegramId: string, limit = 10, offset = 0) {
-    const user = await prisma.user.findUnique({
-      where: { telegramId }
-    });
-
-    if (!user) {
-      throw new Error('User not found');
-    }
-
-    return prisma.starTransaction.findMany({
-      where: {
-        user: { telegramId }
-      },
-      orderBy: {
-        createdAt: 'desc'
-      },
-      take: limit,
-      skip: offset
-    });
   }
 }
