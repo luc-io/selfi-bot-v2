@@ -1,57 +1,51 @@
+import { Composer } from 'grammy';
+import { BotContext } from '../../types/bot.js';
 import { GenerationService } from '../../services/generation.js';
-import { Bot } from 'grammy';
-import { UserService } from '../../lib/user.js';
 import { logger } from '../../lib/logger.js';
+import { PrismaClient } from '@prisma/client';
 
-export async function setupGenerationCommand(bot: Bot) {
-  bot.command('gen', async (ctx) => {
-    try {
-      const telegramId = ctx.from.id.toString();
-      const prompt = ctx.message.text.substring(5).trim();
+const prisma = new PrismaClient();
+const composer = new Composer<BotContext>();
 
-      if (!prompt) {
-        await ctx.reply(
-          'Please provide a prompt for image generation.\n\nExample: /gen a beautiful landscape'
-        );
-        return;
-      }
+composer.command('gen', async (ctx) => {
+  const prompt = ctx.message?.text?.replace('/gen', '').trim();
+  if (!prompt) {
+    await ctx.reply('Please provide a prompt after /gen command');
+    return;
+  }
 
-      // Get or create user
-      const user = await UserService.getUser(telegramId);
+  if (!ctx.from?.id) {
+    await ctx.reply('Could not identify user');
+    return;
+  }
 
-      if (!user) {
-        await ctx.reply('Please register first with /start');
-        return;
-      }
-
-      if (user.stars < 1) {
-        await ctx.reply('Not enough stars! Buy some with /buy');
-        return;
-      }
-
-      const message = await ctx.reply('🎨 Generating your image...');
-
-      const { imageUrl } = await GenerationService.generate(user.databaseId, {
-        prompt,
-        negativePrompt: ctx.message.text.includes('--no')
-          ? ctx.message.text.split('--no')[1].trim()
-          : undefined
-      });
-
-      // Send the result
-      await ctx.api.deleteMessage(ctx.chat.id, message.message_id);
-      await ctx.replyWithPhoto(imageUrl);
-
-    } catch (error) {
-      logger.error({ 
-        error,
-        userId: ctx.from.id,
-        command: 'gen'
-      }, 'Generation command failed');
-
-      await ctx.reply(
-        'Sorry, something went wrong. Please try again or contact support if the issue persists.'
-      );
+  try {
+    // Check user stars balance
+    const user = await prisma.user.findUnique({
+      where: { telegramId: ctx.from.id.toString() }
+    });
+    
+    if (!user?.stars || user.stars < 1) {
+      await ctx.reply('You need at least 1 star to generate an image. Use /stars to buy more.');
+      return;
     }
-  });
-}
+
+    await ctx.reply('🎨 Generating your image...');
+
+    const { imageUrl } = await GenerationService.generate(user.telegramId, {
+      prompt,
+    });
+
+    await ctx.replyWithPhoto(imageUrl);
+  } catch (error: any) {
+    const errorMessage = error.message || 'Unknown error';
+    logger.error({ 
+      error: errorMessage,
+      prompt,
+      telegramId: ctx.from.id.toString()
+    }, 'Generation command failed');
+    await ctx.reply('Sorry, something went wrong while generating your image.');
+  }
+});
+
+export default composer;
