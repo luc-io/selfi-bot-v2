@@ -1,16 +1,24 @@
-export const MODELS = {
-  'fal.ai/fal-ai/flux-lora': {
-    displayName: 'Flux',
-    cost: 1,
-    isDefault: true
+type ModelConfig = {
+  readonly displayName: string;
+  readonly cost: number;
+  readonly isDefault?: boolean;
+};
+
+export const MODELS: Record<string, ModelConfig> = {
+  'fal.ai/fal-ai/flux-lora': { 
+    displayName: "Flux", 
+    cost: 1, 
+    isDefault: true 
   },
-  'fal.ai/fal-ai/flux-pro/v1.1-ultra-finetuned': {
-    displayName: 'Flux Pro',
+  'fal.ai/fal-ai/flux-pro': { 
+    displayName: "Flux Pro", 
     cost: 2,
+    isDefault: false 
   },
-  'replicate.com/black-forest-labs/flux-schnell-lora': {
-    displayName: 'Flux Schnell',
+  'fal.ai/fal-ai/flux-schnell': { 
+    displayName: "Flux Schnell", 
     cost: 1,
+    isDefault: false 
   }
 } as const;
 
