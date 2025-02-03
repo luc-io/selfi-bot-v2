@@ -1,61 +1,114 @@
 import { FastifyPluginAsync } from 'fastify';
 import { prisma } from '../../lib/prisma.js';
 import { Prisma } from '@prisma/client';
+import { logger } from '../../lib/logger.js';
+import { validateTelegramWebAppData } from '../../lib/telegram.js';
+
+interface ParameterRequestBody {
+  model?: {
+    databaseId: string;
+    baseModelId: string;
+    modelPath: string;
+  };
+  params: {
+    image_size?: string;
+    num_inference_steps?: number;
+    seed?: number;
+    guidance_scale?: number;
+    num_images?: number;
+    sync_mode?: boolean;
+    enable_safety_checker?: boolean;
+    output_format?: string;
+  };
+}
 
 export const paramsRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get('/parameters/:telegramId', async (request, reply) => {
-    const { telegramId } = request.params as { telegramId: string };
+  // Get user parameters
+  fastify.get('/params/:userId', async (request, reply) => {
+    try {
+      const { userId } = request.params as { userId: string };
 
-    const user = await prisma.user.findUnique({
-      where: { telegramId },
-      include: {
-        parameters: true
+      // Validate the request is from Telegram
+      const initData = request.headers['x-telegram-init-data'] as string;
+      if (!initData || !validateTelegramWebAppData(initData)) {
+        return reply.status(401).send({ error: 'Invalid authentication' });
       }
-    });
 
-    if (!user) {
-      return reply.status(404).send({ error: 'User not found' });
+      const user = await prisma.user.findUnique({
+        where: { telegramId: userId },
+        include: {
+          parameters: true
+        }
+      });
+
+      if (!user) {
+        return reply.status(404).send({ error: 'User not found' });
+      }
+
+      return reply.send({
+        params: user.parameters?.params || {}
+      });
+    } catch (error) {
+      logger.error({ error }, 'Error getting user parameters');
+      return reply.status(500).send({ error: 'Internal server error' });
     }
-
-    return reply.send({
-      parameters: user.parameters?.params || {}
-    });
   });
 
-  fastify.put('/parameters/:telegramId', async (request, reply) => {
-    const { telegramId } = request.params as { telegramId: string };
-    const parameters = request.body as Record<string, unknown>;
+  // Save user parameters
+  fastify.post('/params', async (request, reply) => {
+    try {
+      const { model, params } = request.body as ParameterRequestBody;
 
-    const user = await prisma.user.findUnique({
-      where: { telegramId },
-      include: {
-        parameters: true
+      // Validate the request is from Telegram
+      const initData = request.headers['x-telegram-init-data'] as string;
+      if (!initData || !validateTelegramWebAppData(initData)) {
+        return reply.status(401).send({ error: 'Invalid authentication' });
       }
-    });
 
-    if (!user) {
-      return reply.status(404).send({ error: 'User not found' });
+      // Extract user ID from init data
+      const telegramId = request.headers['x-telegram-user-id'] as string;
+      if (!telegramId) {
+        return reply.status(400).send({ error: 'Missing user ID' });
+      }
+
+      // Get or create user
+      const user = await prisma.user.upsert({
+        where: { telegramId },
+        create: { telegramId },
+        update: {}
+      });
+
+      // Save parameters
+      const savedParams = await prisma.userParameters.upsert({
+        where: {
+          userDatabaseId: user.databaseId
+        },
+        create: {
+          user: { connect: { databaseId: user.databaseId } },
+          params: {
+            ...params,
+            model: model || null
+          }
+        },
+        update: {
+          params: {
+            ...params,
+            model: model || null
+          }
+        }
+      });
+
+      logger.info({ 
+        telegramId,
+        params: savedParams.params
+      }, 'Parameters saved successfully');
+
+      return reply.send({
+        params: savedParams.params
+      });
+    } catch (error) {
+      logger.error({ error }, 'Error saving user parameters');
+      return reply.status(500).send({ error: 'Internal server error' });
     }
-
-    // Cast parameters to Prisma.InputJsonValue to ensure type compatibility
-    const jsonParams = parameters as Prisma.InputJsonValue;
-
-    // Update or create parameters
-    const updatedParams = await prisma.userParameters.upsert({
-      where: {
-        userDatabaseId: user.databaseId
-      },
-      create: {
-        user: { connect: { telegramId } },
-        params: jsonParams
-      },
-      update: {
-        params: jsonParams
-      }
-    });
-
-    return reply.send({
-      parameters: updatedParams.params
-    });
   });
 };
