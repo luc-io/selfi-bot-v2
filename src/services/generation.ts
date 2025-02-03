@@ -1,6 +1,5 @@
 import { fal } from '@fal-ai/client';
-import { FluxLoraInput } from '@fal-ai/client/dist/services/flux-lora';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { config } from '../config.js';
 import { logger } from '../lib/logger.js';
 import { prisma } from '../lib/prisma.js';
@@ -21,7 +20,7 @@ type ImageSize = {
   height: number;
 }
 
-interface FalRequest extends Partial<FluxLoraInput> {
+interface FalRequest {
   prompt: string;
   negative_prompt?: string;
   lora_path?: string;
@@ -30,6 +29,11 @@ interface FalRequest extends Partial<FluxLoraInput> {
   image_size?: 'landscape_4_3' | 'portrait_4_3' | 'square' | ImageSize;
   num_inference_steps?: number;
   guidance_scale?: number;
+}
+
+interface GenerationParameters {
+  num_inference_steps: number;
+  guidance_scale: number;
 }
 
 interface FalResponse {
@@ -61,7 +65,8 @@ export class GenerationService {
         select: {
           databaseId: true,
           stars: true,
-          telegramId: true
+          telegramId: true,
+          parameters: true
         }
       });
 
@@ -73,6 +78,7 @@ export class GenerationService {
       let falRequestId: string | null = null;
 
       try {
+        const userParams = user.parameters?.params as GenerationParameters | null;
         const generationParams: FalRequest = {
           prompt,
           negative_prompt: negativePrompt,
@@ -80,8 +86,8 @@ export class GenerationService {
           lora_scale: loraScale,
           seed,
           image_size: 'landscape_4_3',
-          num_inference_steps: 28,
-          guidance_scale: 3.5,
+          num_inference_steps: userParams?.num_inference_steps || 28,
+          guidance_scale: userParams?.guidance_scale || 3.5,
         };
 
         // Generate image using flux-lora model
@@ -133,6 +139,18 @@ export class GenerationService {
 
         // Update database only if we have a valid image
         if (generatedImageUrl) {
+          const metadata: Prisma.JsonObject = {
+            falRequestId,
+            inferenceTime: response.data.timings?.inference || null,
+            hasNsfw: response.data.has_nsfw_concepts?.[0] || false,
+            parameters: {
+              num_inference_steps: generationParams.num_inference_steps,
+              guidance_scale: generationParams.guidance_scale,
+              lora_scale: generationParams.lora_scale,
+              image_size: generationParams.image_size,
+            }
+          };
+
           await prisma.user.update({
             where: { telegramId },
             data: {
@@ -145,11 +163,7 @@ export class GenerationService {
                   imageUrl: generatedImageUrl,
                   seed: seed ? BigInt(seed) : null,
                   starsUsed: 1,
-                  metadata: {
-                    falRequestId,
-                    inferenceTime: response.data.timings?.inference,
-                    hasNsfw: response.data.has_nsfw_concepts?.[0] || false
-                  }
+                  metadata
                 }
               }
             }

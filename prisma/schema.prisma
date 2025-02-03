@@ -8,8 +8,8 @@ datasource db {
 }
 
 model User {
-  databaseId        String            @id @default(cuid())  // Internal database ID
-  telegramId        String            @unique               // External Telegram user ID
+  databaseId        String            @id @default(cuid())
+  telegramId        String            @unique
   username          String?
   stars             Int               @default(0)
   totalSpentStars   Int               @default(0)
@@ -29,7 +29,7 @@ model UserParameters {
   databaseId     String   @id @default(cuid())
   userDatabaseId String   @unique
   user           User     @relation(fields: [userDatabaseId], references: [databaseId])
-  params         Json     // Store all the generation parameters
+  params         Json
   updatedAt      DateTime @updatedAt
 
   @@map("UserParameters")
@@ -54,7 +54,6 @@ model LoraModel {
   configUrl        String?      @unique
   baseModelId      String
   baseModel        BaseModel    @relation(fields: [baseModelId], references: [databaseId])
-  type             LoraType     @default(STYLE)
   status           LoraStatus   @default(PENDING)
   previewImageUrl  String?
   isPublic         Boolean      @default(false)
@@ -102,7 +101,7 @@ model Generation {
   user            User         @relation(fields: [userDatabaseId], references: [databaseId])
   baseModelId     String
   baseModel       BaseModel    @relation(fields: [baseModelId], references: [databaseId])
-  loraId          String?      // Optional - generation might not use a LoRA
+  loraId          String?
   lora            LoraModel?   @relation(fields: [loraId], references: [databaseId])
   prompt          String
   negativePrompt  String?
@@ -131,11 +130,6 @@ model StarTransaction {
   @@index([userDatabaseId])
   @@index([createdAt])
   @@map("StarTransaction")
-}
-
-enum LoraType {
-  STYLE
-  PORTRAIT
 }
 
 enum LoraStatus {
