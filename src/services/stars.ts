@@ -1,10 +1,11 @@
 import { prisma } from '../lib/prisma.js';
 import { logger } from '../lib/logger.js';
+import { Prisma } from '@prisma/client';
 
 export interface StarsTransaction {
   amount: number;
   type: 'GENERATION' | 'TRAINING' | 'PURCHASE' | 'REFUND' | 'ADMIN_GRANT';
-  metadata?: Record<string, unknown>;
+  metadata?: Prisma.JsonValue;
 }
 
 export class StarsService {
@@ -28,7 +29,7 @@ export class StarsService {
             user: { connect: { telegramId } },
             amount,
             type,
-            metadata: metadata || {}
+            metadata: metadata ?? Prisma.JsonNull
           }
         })
       ]);
