@@ -24,7 +24,7 @@ export const paramsRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.put('/parameters/:userId', async (request, reply) => {
     const { userId } = request.params as { userId: string };
-    const parameters = request.body as Prisma.JsonValue;
+    const parameters = request.body as Prisma.InputJsonValue;
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -44,10 +44,10 @@ export const paramsRoutes: FastifyPluginAsync = async (fastify) => {
       },
       create: {
         userId,
-        params: parameters
+        params: parameters as Prisma.InputJsonValue
       },
       update: {
-        params: parameters
+        params: parameters as Prisma.InputJsonValue
       }
     });
 
