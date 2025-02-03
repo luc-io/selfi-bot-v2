@@ -1,44 +1,32 @@
 import { Composer } from 'grammy';
 import { BotContext } from '../../types/bot.js';
-import { PrismaClient } from '@prisma/client';
+import { getOrCreateUser } from '../../lib/user.js';
 import { logger } from '../../lib/logger.js';
 
-const prisma = new PrismaClient();
 const composer = new Composer<BotContext>();
 
 composer.command('start', async (ctx) => {
+  logger.info('Start command received');
+  
+  if (!ctx.from) {
+    logger.warn('No from field in context');
+    await ctx.reply('Could not identify user');
+    return;
+  }
+
   try {
-    if (!ctx.from?.id) {
-      await ctx.reply('Could not identify user');
-      return;
-    }
-
-    // Create or get user
-    const user = await prisma.user.upsert({
-      where: { telegramId: ctx.from.id.toString() },
-      update: {
-        username: ctx.from.username ?? null
-      },
-      create: {
-        id: ctx.from.id.toString(),
-        telegramId: ctx.from.id.toString(),
-        username: ctx.from.username ?? null,
-        stars: 1, // Give 1 free star
-      }
-    });
-
-    await ctx.reply(
-      `Generate amazing images using Flux AI. Each generation costs 1 star. Your balance is ${user.stars} ⭐\n\n` +
-      'Available commands:\n' +
-      '/gen - Generate an image\n' +
-      '/stars - Buy more stars\n' +
-      '/balance - Check your balance\n' +
-      '/help - Show all commands'
-    );
+    const telegramId = ctx.from.id.toString();
+    logger.info({ telegramId, username: ctx.from.username }, 'Getting or creating user');
+    
+    const user = await getOrCreateUser(telegramId, ctx.from.username ?? undefined);
+    logger.info({ telegramId, stars: user.stars }, 'User retrieved/created');
+    
+    await ctx.reply(`Welcome! You have ${user.stars} ⭐`);
+    logger.info({ telegramId }, 'Welcome message sent');
   } catch (error) {
-    logger.error({ error }, 'Failed to start bot');
-    await ctx.reply('Sorry, something went wrong while starting the bot.');
+    logger.error('Error in start command:', error);
+    await ctx.reply('Sorry, something went wrong while processing your request.');
   }
 });
 
-export { composer as startCommand };
+export default composer;

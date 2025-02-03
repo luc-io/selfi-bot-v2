@@ -1,5 +1,5 @@
-import { prisma } from './prisma';
-import { logger } from './logger';
+import { prisma } from './prisma.js';
+import { logger } from './logger.js';
 
 export async function getOrCreateUser(telegramId: string, username?: string) {
   try {
@@ -12,19 +12,18 @@ export async function getOrCreateUser(telegramId: string, username?: string) {
     if (!user) {
       user = await prisma.user.create({
         data: {
-          id: telegramId,
           telegramId,
           username,
           stars: 10 // Welcome bonus
         }
       });
 
-      logger.info({ userId: user.id }, 'New user created');
+      logger.info({ telegramId: user.telegramId }, 'New user created');
 
       // Create transaction for welcome bonus
       await prisma.starTransaction.create({
         data: {
-          userId: user.id,
+          user: { connect: { telegramId: user.telegramId } },
           amount: 10,
           type: 'ADMIN_GRANT',
           metadata: {
@@ -35,7 +34,7 @@ export async function getOrCreateUser(telegramId: string, username?: string) {
     } else if (username && username !== user.username) {
       // Update username if changed
       user = await prisma.user.update({
-        where: { id: user.id },
+        where: { telegramId: user.telegramId },
         data: { username }
       });
     }
@@ -47,12 +46,12 @@ export async function getOrCreateUser(telegramId: string, username?: string) {
   }
 }
 
-export async function updateUserStars(userId: string, amount: number, type: 'GENERATION' | 'TRAINING' | 'PURCHASE' | 'REFUND') {
+export async function updateUserStars(telegramId: string, amount: number, type: 'GENERATION' | 'TRAINING' | 'PURCHASE' | 'REFUND') {
   try {
     const [user, transaction] = await prisma.$transaction([
       // Update user stars
       prisma.user.update({
-        where: { id: userId },
+        where: { telegramId },
         data: {
           stars: { increment: amount },
           totalSpentStars: amount < 0 ? { increment: Math.abs(amount) } : undefined,
@@ -62,7 +61,7 @@ export async function updateUserStars(userId: string, amount: number, type: 'GEN
       // Create transaction record
       prisma.starTransaction.create({
         data: {
-          userId,
+          user: { connect: { telegramId } },
           amount,
           type,
           metadata: {
@@ -72,7 +71,7 @@ export async function updateUserStars(userId: string, amount: number, type: 'GEN
       })
     ]);
 
-    logger.info({ userId, amount, type }, 'User stars updated');
+    logger.info({ telegramId, amount, type }, 'User stars updated');
 
     return { user, transaction };
   } catch (error) {
@@ -81,9 +80,9 @@ export async function updateUserStars(userId: string, amount: number, type: 'GEN
   }
 }
 
-export async function checkUserStars(userId: string, required: number) {
+export async function checkUserStars(telegramId: string, required: number) {
   const user = await prisma.user.findUnique({
-    where: { id: userId },
+    where: { telegramId },
     select: { stars: true }
   });
 

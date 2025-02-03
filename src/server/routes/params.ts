@@ -1,14 +1,15 @@
 import { FastifyPluginAsync } from 'fastify';
 import { prisma } from '../../lib/prisma.js';
+import { Prisma } from '@prisma/client';
 
 export const paramsRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get('/parameters/:userId', async (request, reply) => {
-    const { userId } = request.params as { userId: string };
+  fastify.get('/parameters/:telegramId', async (request, reply) => {
+    const { telegramId } = request.params as { telegramId: string };
 
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { telegramId },
       include: {
-        userParameters: true  // Changed from parameters to userParameters
+        parameters: true
       }
     });
 
@@ -17,18 +18,18 @@ export const paramsRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     return reply.send({
-      parameters: user.userParameters?.params || {}
+      parameters: user.parameters?.params || {}
     });
   });
 
-  fastify.put('/parameters/:userId', async (request, reply) => {
-    const { userId } = request.params as { userId: string };
+  fastify.put('/parameters/:telegramId', async (request, reply) => {
+    const { telegramId } = request.params as { telegramId: string };
     const parameters = request.body as Record<string, unknown>;
 
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { telegramId },
       include: {
-        userParameters: true
+        parameters: true
       }
     });
 
@@ -36,17 +37,19 @@ export const paramsRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(404).send({ error: 'User not found' });
     }
 
-    // Update or create parameters
+    // Cast parameters to Prisma.InputJsonValue to ensure type compatibility
+    const jsonParams = parameters as Prisma.InputJsonValue;
+
     const updatedParams = await prisma.userParameters.upsert({
       where: {
-        userId: userId
+        userDatabaseId: user.databaseId
       },
       create: {
-        userId: userId,
-        params: parameters
+        user: { connect: { telegramId } },
+        params: jsonParams
       },
       update: {
-        params: parameters
+        params: jsonParams
       }
     });
 

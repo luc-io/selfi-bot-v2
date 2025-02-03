@@ -4,6 +4,7 @@ import 'dotenv/config';
 const configSchema = z.object({
   NODE_ENV: z.enum(['development', 'production']).default('development'),
   PORT: z.string().default('3000'),
+  PUBLIC_URL: z.string().optional(),
   
   // Bot
   TELEGRAM_BOT_TOKEN: z.string(),

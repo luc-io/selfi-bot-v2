@@ -32,7 +32,7 @@ composer.command('gen', async (ctx) => {
 
     await ctx.reply('🎨 Generating your image...');
 
-    const { imageUrl } = await GenerationService.generate(user.id, {
+    const { imageUrl } = await GenerationService.generate(user.telegramId, {
       prompt,
     });
 
@@ -42,7 +42,7 @@ composer.command('gen', async (ctx) => {
     logger.error({ 
       error: errorMessage,
       prompt,
-      userId: ctx.from.id.toString()
+      telegramId: ctx.from.id.toString()
     }, 'Generation command failed');
     await ctx.reply('Sorry, something went wrong while generating your image.');
   }
