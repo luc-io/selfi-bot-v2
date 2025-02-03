@@ -1,5 +1,8 @@
-import { Context } from 'grammy';
-import type { SessionFlavor } from 'grammy';
-import type { SessionData } from './interfaces.js';
+import { Context, SessionFlavor } from 'grammy';
+import { User } from '@prisma/client';
+
+interface SessionData {
+  userId?: string;
+}
 
 export type BotContext = Context & SessionFlavor<SessionData>;
