@@ -2,25 +2,35 @@ import { Composer } from 'grammy';
 import { BotContext } from '../../types/bot.js';
 import { logger } from '../../lib/logger.js';
 import { createPayment } from '../../lib/payments.js';
+import { Ids, TelegramId } from '../../types/ids.js';
 
 const composer = new Composer<BotContext>();
+
+interface StarPack {
+  stars: number;
+  price: number;
+  label: string;
+}
+
+interface StarPurchasePayload {
+  stars: number;
+  telegramId: TelegramId;
+}
 
 // Show available star packs
 composer.command('stars', async (ctx) => {
   try {
-    const starPacks = [
+    const starPacks: StarPack[] = [
       { stars: 5, price: 5, label: '5 ⭐' },
       { stars: 10, price: 10, label: '10 ⭐' },
       { stars: 20, price: 20, label: '20 ⭐' },
       { stars: 50, price: 50, label: '50 ⭐' },
     ];
 
-    const buttons = starPacks.map((pack) => [
-      {
-        text: `${pack.label} - ${pack.price} XTR`,
-        callback_data: `buy_stars:${pack.stars}:${pack.price}`,
-      },
-    ]);
+    const buttons = starPacks.map((pack) => [{
+      text: `${pack.label} - ${pack.price} XTR`,
+      callback_data: `buy_stars:${pack.stars}:${pack.price}`,
+    }]);
 
     await ctx.reply('💫 Buy Stars\n\nStars are used for generating images. Each generation costs 1 star.', {
       reply_markup: {
@@ -35,24 +45,25 @@ composer.command('stars', async (ctx) => {
 // Handle star pack selection
 composer.callbackQuery(/buy_stars:(\d+):(\d+)/, async (ctx) => {
   try {
-    if (!ctx.match || !Array.isArray(ctx.match)) {
+    if (!ctx.match || !Array.isArray(ctx.match) || !ctx.from?.id) {
       await ctx.answerCallbackQuery('Invalid selection');
       return;
     }
 
     const stars = Number(ctx.match[1]);
     const price = Number(ctx.match[2]);
+    const telegramId = Ids.telegram(ctx.from.id.toString());
 
     // Create a unique start parameter
     const startParameter = `stars_${Date.now()}`;
+    const payload = `stars_${stars}_${telegramId}`;
 
     const title = `${stars} Stars Package`;
     const description = `Buy ${stars} stars for generating images with Selfi`;
-    const payload = `stars_${stars}_${ctx.from?.id}`;
     const currency = 'XTR';
     const prices = [{
       label: `${stars} Stars`,
-      amount: price // XTR doesn't need conversion like other currencies
+      amount: price // XTR doesn't need conversion
     }];
 
     await ctx.replyWithInvoice(
@@ -83,16 +94,18 @@ composer.on('pre_checkout_query', async (ctx) => {
   try {
     const query = ctx.preCheckoutQuery;
     
-    // Parse the payload to get stars and userId
-    const [_, stars, userId] = query.invoice_payload.split('_');
-    
-    if (!stars || !userId) {
+    // Parse the payload
+    const [_, starsStr, telegramIdStr] = query.invoice_payload.split('_');
+    const stars = Number(starsStr);
+    const telegramId = Ids.telegram(telegramIdStr);
+
+    if (!stars || !telegramId) {
       await ctx.answerPreCheckoutQuery(false, 'Invalid payment data');
       return;
     }
 
     // Verify user exists
-    const user = await ctx.api.getChat(Number(userId));
+    const user = await ctx.api.getChat(Number(telegramIdStr));
     if (!user) {
       await ctx.answerPreCheckoutQuery(false, 'User not found');
       return;
@@ -102,7 +115,7 @@ composer.on('pre_checkout_query', async (ctx) => {
     await ctx.answerPreCheckoutQuery(true);
     
     logger.info({
-      userId,
+      telegramId,
       stars,
       amount: query.total_amount
     }, 'Pre-checkout approved');
@@ -119,18 +132,20 @@ composer.on(':successful_payment', async (ctx) => {
     const payment = ctx.message?.successful_payment;
     if (!payment) return;
 
-    const [_, stars, userId] = payment.invoice_payload.split('_');
-    const amount = payment.total_amount; // No need to convert XTR amount
+    const [_, starsStr, telegramIdStr] = payment.invoice_payload.split('_');
+    const stars = Number(starsStr);
+    const telegramId = Ids.telegram(telegramIdStr);
+    const amount = payment.total_amount;
 
     await createPayment({
-      userId,
+      telegramId,
       amount,
-      stars: Number(stars),
+      stars,
       telegramPaymentChargeId: payment.provider_payment_charge_id,
     });
 
     logger.info({
-      userId,
+      telegramId,
       stars,
       amount,
       chargeId: payment.provider_payment_charge_id
