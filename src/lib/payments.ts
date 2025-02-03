@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 interface PaymentData {
-  userId: string;
+  telegramId: string;  // Changed from userId
   amount: number;
   stars: number;
   telegramPaymentChargeId: string;
@@ -19,7 +19,7 @@ export async function createPayment(data: PaymentData): Promise<void> {
     // Create transaction entry in the database
     await prisma.starTransaction.create({
       data: {
-        userId: data.userId,
+        user: { connect: { telegramId: data.telegramId } },
         amount: data.amount,
         type: 'PURCHASE',
         telegramPaymentChargeId: data.telegramPaymentChargeId,
@@ -29,7 +29,7 @@ export async function createPayment(data: PaymentData): Promise<void> {
 
     // Update user's star balance
     await prisma.user.update({
-      where: { id: data.userId },
+      where: { telegramId: data.telegramId },
       data: {
         stars: { increment: data.stars },
         totalBoughtStars: { increment: data.stars },
