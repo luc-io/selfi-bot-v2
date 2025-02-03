@@ -9,7 +9,7 @@ export const paramsRoutes: FastifyPluginAsync = async (fastify) => {
     const user = await prisma.user.findUnique({
       where: { telegramId },
       include: {
-        parameters: true 
+        parameters: true
       }
     });
 
@@ -37,6 +37,7 @@ export const paramsRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(404).send({ error: 'User not found' });
     }
 
+    // Cast parameters to Prisma.JsonValue to ensure type compatibility
     const jsonParams = parameters as Prisma.JsonValue;
 
     const updatedParams = await prisma.userParameters.upsert({
