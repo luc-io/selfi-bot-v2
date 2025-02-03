@@ -8,70 +8,156 @@ datasource db {
 }
 
 model User {
-  databaseId String   @id @default(cuid())
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  databaseId        String            @id @default(cuid())
+  telegramId        String            @unique
+  username          String?
+  stars             Int               @default(0)
+  totalSpentStars   Int               @default(0)
+  totalBoughtStars  Int               @default(0)
+  generations       Generation[]
+  models            LoraModel[]
+  trainings         Training[]
+  starTransactions  StarTransaction[]
+  parameters        UserParameters?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
-  telegramId String  @unique
-  stars      Int     @default(0)
-  
-  generations Generation[]
-  parameters UserParameters?
+  @@map("User")
 }
 
 model UserParameters {
   databaseId     String   @id @default(cuid())
-  createdAt      DateTime @default(now())
+  userDatabaseId String   @unique
+  user           User     @relation(fields: [userDatabaseId], references: [databaseId])
+  params         Json
   updatedAt      DateTime @updatedAt
 
-  user           User     @relation(fields: [userDatabaseId], references: [databaseId], onDelete: Cascade)
-  userDatabaseId String   @unique
-
-  params         Json     @default("{}")
-}
-
-model Generation {
-  databaseId  String   @id @default(cuid())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  user        User     @relation(fields: [userId], references: [databaseId], onDelete: Cascade)
-  userId      String
-
-  baseModel   BaseModel @relation(fields: [baseModelId], references: [databaseId])
-  baseModelId String
-
-  prompt         String
-  negativePrompt String?
-  seed           BigInt?
-  imageUrl       String
-  starsUsed      Int     @default(1)
-  metadata       Json?
-
-  lora          Lora?   @relation(fields: [loraId], references: [databaseId])
-  loraId        String?
+  @@map("UserParameters")
 }
 
 model BaseModel {
-  databaseId        String       @id @default(cuid())
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  databaseId         String       @id @default(cuid())
+  modelPath          String       @unique
+  costPerGeneration  Int          @default(1)
+  generations        Generation[]
+  loras              LoraModel[]
+  trainings          Training[]
 
-  modelPath         String       @unique
-  costPerGeneration Int
-  generations       Generation[]
-  loras            Lora[]
+  @@map("BaseModel")
 }
 
-model Lora {
-  databaseId       String     @id @default(cuid())
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
-
+model LoraModel {
+  databaseId       String       @id @default(cuid())
   name             String
-  baseModel        BaseModel  @relation(fields: [baseModelId], references: [databaseId])
+  triggerWord      String
+  weightsUrl       String?      @unique
+  configUrl        String?      @unique
   baseModelId      String
-  loraPath         String     @unique
-
+  baseModel        BaseModel    @relation(fields: [baseModelId], references: [databaseId])
+  status           LoraStatus   @default(PENDING)
+  previewImageUrl  String?
+  isPublic         Boolean      @default(false)
+  starsRequired    Int          @default(2)
+  userDatabaseId   String
+  user             User         @relation(fields: [userDatabaseId], references: [databaseId])
   generations      Generation[]
+  training         Training?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([userDatabaseId])
+  @@index([isPublic])
+  @@map("LoraModel")
+}
+
+model Training {
+  databaseId      String       @id @default(cuid())
+  loraId          String       @unique
+  lora            LoraModel    @relation(fields: [loraId], references: [databaseId])
+  baseModelId     String
+  baseModel       BaseModel    @relation(fields: [baseModelId], references: [databaseId])
+  userDatabaseId  String
+  user            User         @relation(fields: [userDatabaseId], references: [databaseId])
+  imageUrls       String[]
+  instancePrompt  String
+  classPrompt     String?
+  steps           Int          @default(100)
+  learningRate    Float        @default(0.0001)
+  starsSpent      Int
+  status          TrainStatus  @default(PENDING)
+  error           String?
+  startedAt       DateTime     @default(now())
+  completedAt     DateTime?
+  metadata        Json?
+
+  @@index([userDatabaseId])
+  @@index([status])
+  @@map("Training")
+}
+
+model Generation {
+  databaseId      String       @id @default(cuid())
+  userDatabaseId  String
+  user            User         @relation(fields: [userDatabaseId], references: [databaseId])
+  baseModelId     String
+  baseModel       BaseModel    @relation(fields: [baseModelId], references: [databaseId])
+  loraId          String?
+  lora            LoraModel?   @relation(fields: [loraId], references: [databaseId])
+  prompt          String
+  negativePrompt  String?
+  imageUrl        String
+  seed            BigInt?
+  starsUsed       Int
+  metadata        Json?
+  createdAt       DateTime     @default(now())
+
+  @@index([userDatabaseId])
+  @@index([createdAt])
+  @@map("Generation")
+}
+
+model StarTransaction {
+  databaseId              String            @id @default(cuid())
+  userDatabaseId         String
+  user                   User               @relation(fields: [userDatabaseId], references: [databaseId])
+  amount                 Int
+  type                   TransactionType
+  telegramPaymentChargeId String?          @unique
+  status                 TransactionStatus  @default(COMPLETED)
+  metadata               Json?
+  createdAt             DateTime           @default(now())
+
+  @@index([userDatabaseId])
+  @@index([createdAt])
+  @@map("StarTransaction")
+}
+
+enum LoraStatus {
+  PENDING
+  TRAINING
+  COMPLETED
+  FAILED
+}
+
+enum TrainStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum TransactionType {
+  PURCHASE
+  GENERATION
+  TRAINING
+  REFUND
+  ADMIN_GRANT
+  BONUS
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
 }
