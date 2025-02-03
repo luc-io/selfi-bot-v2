@@ -8,12 +8,12 @@ datasource db {
 }
 
 model User {
-  id                String       @id
-  telegramId        String       @unique
+  databaseId        String       @id @default(cuid()) // Internal database ID
+  telegramId        String       @unique  // External Telegram user ID
   username          String?
   stars             Int          @default(0)
-  totalSpentStars   Int         @default(0)
-  totalBoughtStars  Int         @default(0)
+  totalSpentStars   Int          @default(0)
+  totalBoughtStars  Int          @default(0)
   generations       Generation[]
   models            LoraModel[]
   trainings         Training[]
@@ -21,106 +21,116 @@ model User {
   parameters        UserParameters?
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
+
+  @@map("User") // Keep the table name as "User"
 }
 
 model UserParameters {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  user      User     @relation(fields: [userId], references: [id])
-  params    Json     // Store all the generation parameters
-  updatedAt DateTime @updatedAt
+  databaseId  String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [databaseId])
+  params      Json     // Store all the generation parameters
+  updatedAt   DateTime @updatedAt
+
+  @@map("UserParameters")
 }
 
 model BaseModel {
-  id                String       @id @default(cuid())
-  modelPath         String      @unique
-  costPerGeneration Int         @default(1)
-  generations       Generation[]
-  loras             LoraModel[]
-  trainings         Training[]
+  databaseId         String       @id @default(cuid())
+  modelPath          String       @unique
+  costPerGeneration  Int          @default(1)
+  generations        Generation[]
+  loras              LoraModel[]
+  trainings          Training[]
+
+  @@map("BaseModel")
 }
 
 model LoraModel {
-  id              String       @id @default(cuid())
-  name            String
-  triggerWord     String
-  weightsUrl      String?     @unique
-  configUrl       String?     @unique
-  baseModelId     String
-  baseModel       BaseModel   @relation(fields: [baseModelId], references: [id])
-  type            LoraType    @default(STYLE)
-  status          LoraStatus  @default(PENDING)
-  previewImageUrl String?
-  isPublic        Boolean     @default(false)
-  starsRequired   Int         @default(2)
-  userId          String
-  user            User        @relation(fields: [userId], references: [id])
-  generations     Generation[]
-  training        Training?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  databaseId       String       @id @default(cuid())
+  name             String
+  triggerWord      String
+  weightsUrl       String?      @unique
+  configUrl        String?      @unique
+  baseModelId      String
+  baseModel        BaseModel    @relation(fields: [baseModelId], references: [databaseId])
+  type             LoraType     @default(STYLE)
+  status           LoraStatus   @default(PENDING)
+  previewImageUrl  String?
+  isPublic         Boolean      @default(false)
+  starsRequired    Int          @default(2)
+  userId           String
+  user             User         @relation(fields: [userId], references: [databaseId])
+  generations      Generation[]
+  training         Training?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 
   @@index([userId])
   @@index([isPublic])
+  @@map("LoraModel")
 }
 
 model Training {
-  id              String       @id @default(cuid())
-  loraId          String      @unique
-  lora            LoraModel   @relation(fields: [loraId], references: [id])
+  databaseId      String       @id @default(cuid())
+  loraId          String       @unique
+  lora            LoraModel    @relation(fields: [loraId], references: [databaseId])
   baseModelId     String
-  baseModel       BaseModel   @relation(fields: [baseModelId], references: [id])
+  baseModel       BaseModel    @relation(fields: [baseModelId], references: [databaseId])
   userId          String
-  user            User        @relation(fields: [userId], references: [id])
+  user            User         @relation(fields: [userId], references: [databaseId])
   imageUrls       String[]
   instancePrompt  String
   classPrompt     String?
-  steps           Int         @default(100)
-  learningRate    Float       @default(0.0001)
+  steps           Int          @default(100)
+  learningRate    Float        @default(0.0001)
   starsSpent      Int
-  status          TrainStatus @default(PENDING)
+  status          TrainStatus  @default(PENDING)
   error           String?
-  startedAt       DateTime    @default(now())
+  startedAt       DateTime     @default(now())
   completedAt     DateTime?
   metadata        Json?
 
   @@index([userId])
   @@index([status])
+  @@map("Training")
 }
 
 model Generation {
-  id              String      @id @default(cuid())
+  databaseId      String       @id @default(cuid())
   userId          String
-  user            User        @relation(fields: [userId], references: [id])
+  user            User         @relation(fields: [userId], references: [databaseId])
   baseModelId     String
-  baseModel       BaseModel   @relation(fields: [baseModelId], references: [id])
-  loraId          String?     // Optional - generation might not use a LoRA
-  lora            LoraModel?  @relation(fields: [loraId], references: [id])
+  baseModel       BaseModel    @relation(fields: [baseModelId], references: [databaseId])
+  loraId          String?      // Optional - generation might not use a LoRA
+  lora            LoraModel?   @relation(fields: [loraId], references: [databaseId])
   prompt          String
   negativePrompt  String?
   imageUrl        String
   seed            BigInt?
   starsUsed       Int
   metadata        Json?
-  createdAt       DateTime    @default(now())
+  createdAt       DateTime     @default(now())
 
   @@index([userId])
   @@index([createdAt])
+  @@map("Generation")
 }
 
 model StarTransaction {
-  id                      String    @id @default(cuid())
+  databaseId              String             @id @default(cuid())
   userId                  String
-  user                    User      @relation(fields: [userId], references: [id])
+  user                    User               @relation(fields: [userId], references: [databaseId])
   amount                  Int
   type                    TransactionType
-  telegramPaymentChargeId String?   @unique
-  status                  TransactionStatus @default(COMPLETED)
+  telegramPaymentChargeId String?           @unique
+  status                  TransactionStatus  @default(COMPLETED)
   metadata                Json?
-  createdAt              DateTime   @default(now())
+  createdAt              DateTime           @default(now())
 
   @@index([userId])
   @@index([createdAt])
+  @@map("StarTransaction")
 }
 
 enum LoraType {
