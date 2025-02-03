@@ -1,34 +1,39 @@
-import { Bot, session } from 'grammy';
-import { autoRetry } from '@grammyjs/auto-retry';
-import { run } from '@grammyjs/runner';
-import type { BotContext } from './types/bot.js';
+import { Bot } from 'grammy';
+import { BotContext } from './types/bot.js';
 import { config } from './config.js';
-import { setupCommands } from './bot/commands/index.js';
-import { setupServer } from './server/index.js';
+import { fastify } from 'fastify';
+import setupServer from './server/index.js';
+import commands from './bot/commands/index.js';  // Changed to default import
 import { logger } from './lib/logger.js';
 
-// Create bot instance
-const bot = new Bot<BotContext>(config.TELEGRAM_BOT_TOKEN);
-
-// Add middleware
-bot.api.config.use(autoRetry());
-
-bot.use(session({
-  initial: () => ({})
-}));
-
-// Error handling
-bot.catch((err) => {
-  logger.error({ error: err }, 'Bot error');
+const bot = new Bot<BotContext>(config.TELEGRAM_BOT_TOKEN, {
+  client: {
+    apiRoot: config.TELEGRAM_BOT_API_URL,
+  }
 });
 
-// Setup bot commands
-setupCommands(bot);
+bot.api.config.use((prev, method, payload) => {
+  return prev(method, {
+    ...payload,
+    parse_mode: 'HTML',
+  });
+});
 
-// Start bot
-run(bot);
+bot.use(commands); // Use the commands directly since it's already a Composer
+logger.info('Bot commands registered');
 
-// Setup API server
-setupServer();
+if (config.BOT_WEBHOOK_URL) {
+  const server = fastify();
+  setupServer(server, bot);
+  
+  await server.listen({ port: config.PORT, host: '0.0.0.0' });
+  logger.info(`Server started on port ${config.PORT}`);
+} else {
+  logger.info('Starting in webhook mode');
+  await bot.start();
+}
 
-logger.info('Bot started');
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM received, shutting down');
+  process.exit(0);
+});
