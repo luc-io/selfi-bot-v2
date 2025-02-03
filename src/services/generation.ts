@@ -46,13 +46,13 @@ interface FalResponse {
 }
 
 export class GenerationService {
-  static async generate(userId: string, options: GenerationOptions) {
+  static async generate(telegramId: string, options: GenerationOptions) {
     const { prompt, negativePrompt, loraPath, loraScale = 0.8, seed } = options;
 
     try {
-      // First check user's stars balance and get telegramId
+      // First check user's stars balance using telegramId
       const user = await prisma.user.findUnique({
-        where: { id: userId },
+        where: { telegramId },
         select: {
           id: true,
           stars: true,
@@ -111,19 +111,15 @@ export class GenerationService {
         // Get or create the base model
         let baseModel = await prisma.baseModel.findFirst({
           where: {
-            name: 'Flux',
-            type: 'FLUX',
-            isDefault: true
+            modelPath: 'fal-ai/flux-lora'
           }
         });
 
         if (!baseModel) {
           baseModel = await prisma.baseModel.create({
             data: {
-              name: 'Flux',
-              version: 'v1',
-              type: 'FLUX',
-              isDefault: true
+              modelPath: 'fal-ai/flux-lora',
+              costPerGeneration: 1
             }
           });
         }
@@ -131,7 +127,7 @@ export class GenerationService {
         // Update database only if we have a valid image
         if (generatedImageUrl) {
           await prisma.user.update({
-            where: { id: userId },
+            where: { telegramId },
             data: {
               stars: { decrement: 1 },
               generations: {
@@ -180,7 +176,7 @@ export class GenerationService {
       logger.error({ 
         error: errorMessage,
         prompt,
-        userId 
+        userId: telegramId
       }, 'Generation failed');
       throw new Error('Generation failed: ' + errorMessage);
     }
