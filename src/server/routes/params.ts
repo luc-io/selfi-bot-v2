@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { prisma } from '../../lib/prisma.js';
+import { Prisma } from '@prisma/client';
 
 export const paramsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/parameters/:telegramId', async (request, reply) => {
@@ -8,7 +9,7 @@ export const paramsRoutes: FastifyPluginAsync = async (fastify) => {
     const user = await prisma.user.findUnique({
       where: { telegramId },
       include: {
-        userParameters: true 
+        parameters: true 
       }
     });
 
@@ -17,7 +18,7 @@ export const paramsRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     return reply.send({
-      parameters: user.userParameters?.params || {}
+      parameters: user.parameters?.params || {}
     });
   });
 
@@ -28,7 +29,7 @@ export const paramsRoutes: FastifyPluginAsync = async (fastify) => {
     const user = await prisma.user.findUnique({
       where: { telegramId },
       include: {
-        userParameters: true
+        parameters: true
       }
     });
 
@@ -36,17 +37,18 @@ export const paramsRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(404).send({ error: 'User not found' });
     }
 
-    // Update or create parameters
+    const jsonParams = parameters as Prisma.JsonValue;
+
     const updatedParams = await prisma.userParameters.upsert({
       where: {
-        user: { telegramId }
+        userDatabaseId: user.databaseId
       },
       create: {
         user: { connect: { telegramId } },
-        params: parameters
+        params: jsonParams
       },
       update: {
-        params: parameters
+        params: jsonParams
       }
     });
 
