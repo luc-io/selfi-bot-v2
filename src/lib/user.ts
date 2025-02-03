@@ -1,103 +1,98 @@
-import { prisma } from './prisma.js';
-import { logger } from './logger.js';
-import { TransactionType } from '@prisma/client';
+import { prisma } from './prisma';
+import { logger } from './logger';
 
-export class UserService {
-  static async createUser(telegramId: string, username?: string) {
-    try {
-      // Create user with default stars
-      const user = await prisma.user.create({
+export async function getOrCreateUser(telegramId: string, username?: string) {
+  try {
+    // Try to find existing user
+    let user = await prisma.user.findUnique({
+      where: { telegramId }
+    });
+
+    // Create new user if not found
+    if (!user) {
+      user = await prisma.user.create({
         data: {
-          telegramId,   // This is from Telegram
+          telegramId,
           username,
-          stars: 3      // Starting bonus
+          stars: 10 // Welcome bonus
         }
       });
 
       logger.info({ telegramId: user.telegramId }, 'New user created');
 
-      // Record the bonus stars transaction
+      // Create transaction for welcome bonus
       await prisma.starTransaction.create({
         data: {
-          userDatabaseId: user.databaseId,
-          amount: 3,
-          type: TransactionType.BONUS,
+          user: { connect: { telegramId: user.telegramId } },
+          amount: 10,
+          type: 'ADMIN_GRANT',
           metadata: {
-            reason: 'Initial bonus'
+            reason: 'Welcome bonus'
           }
         }
       });
-
-      return user;
-    } catch (error) {
-      logger.error({ error, telegramId, username }, 'Failed to create user');
-      throw error;
-    }
-  }
-
-  static async addStars(user: { databaseId: string }, stars: number, metadata?: any) {
-    try {
-      // Update stars balance
-      await prisma.user.update({
-        where: { databaseId: user.databaseId },
-        data: {
-          stars: { increment: stars },
-          totalBoughtStars: { increment: stars }
-        }
+    } else if (username && username !== user.username) {
+      // Update username if changed
+      user = await prisma.user.update({
+        where: { telegramId: user.telegramId },
+        data: { username }
       });
-
-      // Record transaction
-      const transaction = await prisma.starTransaction.create({
-        data: {
-          userDatabaseId: user.databaseId,
-          amount: stars,
-          type: TransactionType.ADMIN_GRANT,
-          metadata
-        }
-      });
-
-      return transaction;
-    } catch (error) {
-      logger.error({ error, userDatabaseId: user.databaseId, stars }, 'Failed to add stars');
-      throw error;
     }
-  }
 
-  static async decrementStars(userDatabaseId: string, stars: number, type: TransactionType, metadata?: any) {
-    try {
-      const transaction = await prisma.starTransaction.create({
+    return user;
+  } catch (error) {
+    logger.error('Error in getOrCreateUser:', error);
+    throw error;
+  }
+}
+
+export async function updateUserStars(telegramId: string, amount: number, type: 'GENERATION' | 'TRAINING' | 'PURCHASE' | 'REFUND') {
+  try {
+    const [user, transaction] = await prisma.$transaction([
+      // Update user stars
+      prisma.user.update({
+        where: { telegramId },
         data: {
-          userDatabaseId,
-          amount: -stars,
+          stars: { increment: amount },
+          totalSpentStars: amount < 0 ? { increment: Math.abs(amount) } : undefined,
+          totalBoughtStars: amount > 0 && type === 'PURCHASE' ? { increment: amount } : undefined
+        }
+      }),
+      // Create transaction record
+      prisma.starTransaction.create({
+        data: {
+          user: { connect: { telegramId } },
+          amount,
           type,
-          metadata
+          metadata: {
+            timestamp: new Date().toISOString()
+          }
         }
-      });
+      })
+    ]);
 
-      await prisma.user.update({
-        where: { databaseId: userDatabaseId },
-        data: {
-          stars: { decrement: stars },
-          totalSpentStars: { increment: stars }
-        }
-      });
+    logger.info({ telegramId, amount, type }, 'User stars updated');
 
-      return transaction;
-    } catch (error) {
-      logger.error({ error, userDatabaseId, stars }, 'Failed to decrement stars');
-      throw error;
-    }
+    return { user, transaction };
+  } catch (error) {
+    logger.error('Error in updateUserStars:', error);
+    throw error;
+  }
+}
+
+export async function checkUserStars(telegramId: string, required: number) {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { stars: true }
+  });
+
+  if (!user) {
+    throw new Error('User not found');
   }
 
-  static async getUser(userDatabaseId: string) {
-    return prisma.user.findUnique({
-      where: { databaseId: userDatabaseId },
-      select: {
-        databaseId: true,
-        telegramId: true,
-        username: true,
-        stars: true
-      }
-    });
+  if (user.stars < required) {
+    throw new Error(`Insufficient stars. Required: ${required}, Available: ${user.stars}`);
   }
+
+  return true;
 }
