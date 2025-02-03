@@ -1,11 +1,14 @@
 import { Composer } from 'grammy';
 import { BotContext } from '../../types/bot.js';
 import { logger } from '../../lib/logger.js';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../lib/prisma.js';
+import { Ids } from '../../types/ids.js';
 
-const prisma = new PrismaClient();
 const composer = new Composer<BotContext>();
 
+/**
+ * /balance command - Show user's current star balance
+ */
 composer.command('balance', async (ctx) => {
   try {
     if (!ctx.from?.id) {
@@ -13,8 +16,10 @@ composer.command('balance', async (ctx) => {
       return;
     }
 
+    const telegramId = Ids.telegram(ctx.from.id.toString());
+
     const user = await prisma.user.findUnique({
-      where: { telegramId: ctx.from.id.toString() }
+      where: { telegramId }
     });
     
     if (!user) {
@@ -24,7 +29,10 @@ composer.command('balance', async (ctx) => {
 
     await ctx.reply(`⭐ Your balance: ${user.stars} stars\n\nUse /stars to buy more stars for generating images!`);
   } catch (error) {
-    logger.error({ error }, 'Failed to check balance');
+    logger.error({ 
+      error, 
+      telegramId: ctx.from?.id.toString() 
+    }, 'Failed to check balance');
     await ctx.reply('Sorry, something went wrong while checking your balance.');
   }
 });
