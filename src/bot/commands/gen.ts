@@ -19,10 +19,12 @@ composer.command('gen', async (ctx) => {
     return;
   }
 
+  const telegramId = ctx.from.id.toString();
+
   try {
     // Check user stars balance
     const user = await prisma.user.findUnique({
-      where: { telegramId: ctx.from.id.toString() }
+      where: { telegramId }
     });
     
     if (!user?.stars || user.stars < 1) {
@@ -32,7 +34,8 @@ composer.command('gen', async (ctx) => {
 
     await ctx.reply('🎨 Generating your image...');
 
-    const { imageUrl } = await GenerationService.generate(user.id, {
+    // Pass telegramId instead of database ID
+    const { imageUrl } = await GenerationService.generate(telegramId, {
       prompt,
     });
 
@@ -42,7 +45,7 @@ composer.command('gen', async (ctx) => {
     logger.error({ 
       error: errorMessage,
       prompt,
-      userId: ctx.from.id.toString()
+      userId: telegramId
     }, 'Generation command failed');
     await ctx.reply('Sorry, something went wrong while generating your image.');
   }
