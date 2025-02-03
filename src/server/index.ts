@@ -15,8 +15,10 @@ export async function setupServer() {
     allowedHeaders: ['Content-Type', 'x-user-id'],
   });
 
-  // Register routes
-  await server.register(paramsRoutes);
+  // Register routes with /api prefix
+  await server.register(async function (fastify) {
+    await fastify.register(paramsRoutes, { prefix: '/params' });
+  }, { prefix: '/api' });
 
   try {
     const port = parseInt(config.PORT);
