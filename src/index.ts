@@ -36,10 +36,16 @@ await server.listen({
 });
 logger.info(`Server started on port ${config.PORT}`);
 
-// Set webhook URL for Telegram
-const webhookUrl = `${config.PUBLIC_URL}/bot`;
-await bot.api.setWebhook(webhookUrl);
-logger.info(`Webhook set to ${webhookUrl}`);
+// Start bot in long polling mode if no PUBLIC_URL is set
+if (!config.PUBLIC_URL) {
+  bot.start();
+  logger.info('Bot started in long polling mode');
+} else {
+  // Use webhook mode if PUBLIC_URL is available
+  const webhookUrl = `${config.PUBLIC_URL}/bot`;
+  await bot.api.setWebhook(webhookUrl);
+  logger.info(`Webhook set to ${webhookUrl}`);
+}
 
 // Error handling
 bot.catch((err) => {
@@ -53,9 +59,11 @@ process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down');
   
   try {
-    // Delete webhook before shutting down
-    await bot.api.deleteWebhook();
-    logger.info('Webhook deleted');
+    // Delete webhook if it was set
+    if (config.PUBLIC_URL) {
+      await bot.api.deleteWebhook();
+      logger.info('Webhook deleted');
+    }
     
     process.exit(0);
   } catch (error) {
