@@ -3,15 +3,24 @@ import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
 
 export async function loraRoutes(app: FastifyInstance) {
-  // Add CORS configuration for the route
-  const corsConfig = {
-    origin: '*',
-    methods: ['GET']
-  };
-
+  // Register GET /loras/available route
   app.get('/loras/available', {
-    config: {
-      cors: corsConfig
+    schema: {
+      response: {
+        200: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              databaseId: { type: 'string' },
+              name: { type: 'string' },
+              triggerWord: { type: 'string' },
+              status: { type: 'string' },
+              isPublic: { type: 'boolean' }
+            }
+          }
+        }
+      }
     }
   }, async (request, reply) => {
     try {
@@ -34,10 +43,6 @@ export async function loraRoutes(app: FastifyInstance) {
         }
       });
       
-      // Add CORS headers
-      reply.header('Access-Control-Allow-Origin', '*');
-      reply.header('Access-Control-Allow-Methods', 'GET');
-      
       logger.info({ 
         count: loras.length,
         loras: loras.map(l => ({id: l.databaseId, name: l.name}))
@@ -49,4 +54,7 @@ export async function loraRoutes(app: FastifyInstance) {
       reply.status(500).send({ error: 'Failed to fetch available LoRAs' });
     }
   });
+
+  // Log route registration
+  logger.info('LoRA routes registered');
 }
