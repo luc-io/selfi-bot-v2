@@ -13,6 +13,5 @@ declare module '@fal-ai/client' {
     invoke<T>(model: string, params: any): Promise<T>;
   }
 
-  const fal: FalClient;
-  export default fal;
+  export const fal: FalClient;
 }
