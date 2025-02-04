@@ -32,23 +32,3 @@ export async function setupServer(app: FastifyInstance, bot: Bot<BotContext>) {
   const routes = app.printRoutes();
   logger.info({ routes }, 'Server routes configured');
 }
-
-  // Register API routes with explicit prefixes
-  await app.register(async function(fastify) {
-    // Bot webhook handler
-    fastify.post('/bot', webhookCallback(bot, 'fastify'));
-    
-    // API routes
-    await fastify.register(paramsRoutes, { prefix: '/api' });
-    await fastify.register(loraRoutes, { prefix: '/api' });
-
-    // Health check route
-    fastify.get('/health', async () => {
-      return { status: 'ok' };
-    });
-  });
-
-  // Log registered routes for debugging
-  const routes = app.printRoutes();
-  logger.info({ routes }, 'Server routes configured');
-}
