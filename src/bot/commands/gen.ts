@@ -8,17 +8,37 @@ import { logger } from "../../lib/logger.js";
 
 const composer = new Composer<BotContext>();
 
-// Add a filter to only handle text messages with /gen command
+// Cache to prevent duplicate processing
+const processingCache = new Set<string>();
+
+// Clear old entries from cache every minute
+setInterval(() => {
+  processingCache.clear();
+}, 60000);
+
 composer.command("gen", hasSubscription, async (ctx) => {
-  // Early return if this is not a direct command message
+  // Only process text messages with the /gen command
   if (!ctx.message?.text?.startsWith("/gen")) {
     return;
   }
 
-  // Add processing state tracking
+  // Create a unique key for this request
   const messageId = ctx.message.message_id;
   const chatId = ctx.chat.id;
-  const processingKey = `${chatId}:${messageId}`;
+  const processingKey = `${chatId}:${messageId}:${Date.now()}`;
+  
+  // Check if this request is already being processed
+  if (processingCache.has(processingKey)) {
+    logger.info({
+      messageId,
+      chatId,
+      processingKey
+    }, "Skipping duplicate generation request");
+    return;
+  }
+
+  // Add to processing cache
+  processingCache.add(processingKey);
   
   try {
     logger.info({
@@ -50,6 +70,9 @@ composer.command("gen", hasSubscription, async (ctx) => {
       return;
     }
 
+    // Send a "processing" message
+    const processingMsg = await ctx.reply("🎨 Generating your art...");
+
     const response = await generateImage({
       prompt,
       imageSize: userParams?.image_size,
@@ -59,6 +82,9 @@ composer.command("gen", hasSubscription, async (ctx) => {
       enableSafetyChecker: userParams?.enable_safety_checker,
       outputFormat: userParams?.output_format as 'jpeg' | 'png' | undefined,
     });
+
+    // Delete the processing message
+    await ctx.api.deleteMessage(chatId, processingMsg.message_id);
 
     // If there is only one image, use replyWithPhoto
     if (response.images.length === 1) {
@@ -87,6 +113,9 @@ composer.command("gen", hasSubscription, async (ctx) => {
       error
     }, "Generation command failed");
     handleError(ctx, error);
+  } finally {
+    // Remove from processing cache
+    processingCache.delete(processingKey);
   }
 });
 
