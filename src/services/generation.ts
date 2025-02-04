@@ -34,6 +34,8 @@ interface FalRequest {
 interface GenerationParameters {
   num_inference_steps: number;
   guidance_scale: number;
+  image_size?: string;
+  enable_safety_checker?: boolean;
 }
 
 interface FalResponse {
@@ -79,16 +81,29 @@ export class GenerationService {
 
       try {
         const userParams = user.parameters?.params as GenerationParameters | null;
+
+        // Log the saved parameters
+        logger.info({
+          userParams,
+          telegramId: user.telegramId
+        }, 'User saved parameters');
+
         const generationParams: FalRequest = {
           prompt,
           negative_prompt: negativePrompt,
           lora_path: loraPath,
           lora_scale: loraScale,
           seed,
-          image_size: 'landscape_4_3',
+          image_size: (userParams?.image_size as 'landscape_4_3' | 'portrait_4_3' | 'square') || 'landscape_4_3',
           num_inference_steps: userParams?.num_inference_steps || 28,
           guidance_scale: userParams?.guidance_scale || 3.5,
         };
+
+        // Log the final parameters being sent to FAL
+        logger.info({
+          generationParams,
+          telegramId: user.telegramId
+        }, 'Generation parameters being used');
 
         // Generate image using flux-lora model
         const falResult = await fal.subscribe('fal-ai/flux-lora', {
@@ -174,6 +189,7 @@ export class GenerationService {
             prompt,
             falRequestId,
             timing: response.data.timings?.inference,
+            parameters: metadata.parameters,
             telegramId: user.telegramId
           }, 'Generation succeeded');
 
