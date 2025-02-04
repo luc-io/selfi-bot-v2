@@ -3,8 +3,20 @@ import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
 
 export async function loraRoutes(app: FastifyInstance) {
-  app.get('/loras/available', async (request, reply) => {
+  // Add CORS configuration for the route
+  const corsConfig = {
+    origin: '*',
+    methods: ['GET']
+  };
+
+  app.get('/loras/available', {
+    config: {
+      cors: corsConfig
+    }
+  }, async (request, reply) => {
     try {
+      logger.info('Receiving request for available LoRAs');
+      
       const loras = await prisma.loraModel.findMany({
         where: {
           status: 'COMPLETED',
@@ -22,7 +34,15 @@ export async function loraRoutes(app: FastifyInstance) {
         }
       });
       
-      logger.info({ count: loras.length }, 'Fetched available LoRAs');
+      // Add CORS headers
+      reply.header('Access-Control-Allow-Origin', '*');
+      reply.header('Access-Control-Allow-Methods', 'GET');
+      
+      logger.info({ 
+        count: loras.length,
+        loras: loras.map(l => ({id: l.databaseId, name: l.name}))
+      }, 'Fetched available LoRAs');
+      
       return loras;
     } catch (error) {
       logger.error({ error }, 'Failed to fetch available LoRAs');
