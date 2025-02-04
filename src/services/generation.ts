@@ -43,20 +43,19 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
 
   console.log('FAL request params:', JSON.stringify(requestParams, null, 2));
 
-  // Using run instead of subscribe for one-time generation
   const result = await fal.run('fal-ai/flux-lora', requestParams);
   console.log('FAL raw response:', JSON.stringify(result, null, 2));
 
-  // Map all images from the response
-  const images = Array.isArray(result.images) ? result.images : [result.images];
+  // Extract images from result.data.images
+  const images = Array.isArray(result.data.images) ? result.data.images : [result.data.images];
   
   const generationResponse = {
     images: images.map((img: FalImage) => ({
       url: img.url,
       contentType: `image/${params.outputFormat ?? 'jpeg'}`
     })),
-    seed: result.seed,
-    hasNsfwConcepts: result.has_nsfw_concepts || []
+    seed: result.data.seed,
+    hasNsfwConcepts: result.data.has_nsfw_concepts || []
   };
 
   console.log('Final generation response:', JSON.stringify(generationResponse, null, 2));
