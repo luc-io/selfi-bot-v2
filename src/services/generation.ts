@@ -94,9 +94,9 @@ export class GenerationService {
           lora_path: loraPath,
           lora_scale: loraScale,
           seed,
-          image_size: (userParams?.image_size as 'landscape_4_3' | 'portrait_4_3' | 'square') || 'landscape_4_3',
-          num_inference_steps: userParams?.num_inference_steps || 28,
-          guidance_scale: userParams?.guidance_scale || 3.5,
+          image_size: (userParams?.image_size as 'landscape_4_3' | 'portrait_4_3' | 'square') ?? 'landscape_4_3',
+          num_inference_steps: userParams?.num_inference_steps ?? 28,
+          guidance_scale: userParams?.guidance_scale ?? 3.5,
         };
 
         // Log the final parameters being sent to FAL
