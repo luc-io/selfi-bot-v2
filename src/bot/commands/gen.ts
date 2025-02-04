@@ -4,11 +4,30 @@ import { hasSubscription } from "../middlewares/subscription.js";
 import { handleError } from "../../utils/error.js";
 import { BotContext } from "../../types/bot.js";
 import { prisma } from "../../lib/prisma.js";
+import { logger } from "../../lib/logger.js";
 
 const composer = new Composer<BotContext>();
 
+// Add a filter to only handle text messages with /gen command
 composer.command("gen", hasSubscription, async (ctx) => {
+  // Early return if this is not a direct command message
+  if (!ctx.message?.text?.startsWith("/gen")) {
+    return;
+  }
+
+  // Add processing state tracking
+  const messageId = ctx.message.message_id;
+  const chatId = ctx.chat.id;
+  const processingKey = `${chatId}:${messageId}`;
+  
   try {
+    logger.info({
+      messageId,
+      chatId,
+      processingKey,
+      command: ctx.message.text
+    }, "Starting generation command");
+
     // Get user's saved parameters
     const user = await prisma.user.findUnique({
       where: { telegramId: ctx.from?.id.toString() },
@@ -25,8 +44,14 @@ composer.command("gen", hasSubscription, async (ctx) => {
       output_format?: string;
     } | null;
 
+    const prompt = ctx.message.text.replace(/^\/gen\s+/, "").trim();
+    if (!prompt) {
+      await ctx.reply("Please provide a prompt after the /gen command.");
+      return;
+    }
+
     const response = await generateImage({
-      prompt: ctx.message?.text?.replace(/^\/gen\s+/, "") || "",
+      prompt,
       imageSize: userParams?.image_size,
       numInferenceSteps: userParams?.num_inference_steps,
       guidanceScale: userParams?.guidance_scale,
@@ -46,7 +71,21 @@ composer.command("gen", hasSubscription, async (ctx) => {
       );
       await ctx.replyWithMediaGroup(mediaGroup);
     }
+
+    logger.info({
+      messageId,
+      chatId,
+      processingKey,
+      imagesCount: response.images.length
+    }, "Generation command completed");
+
   } catch (error) {
+    logger.error({
+      messageId,
+      chatId,
+      processingKey,
+      error
+    }, "Generation command failed");
     handleError(ctx, error);
   }
 });
