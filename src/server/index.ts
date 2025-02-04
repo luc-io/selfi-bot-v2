@@ -5,7 +5,6 @@ import { BotContext } from '../types/bot.js';
 import { logger } from '../lib/logger.js';
 import { paramsRoutes } from './routes/params.js';
 import { loraRoutes } from './routes/loras.js';
-import { testRoutes } from './routes/test.js';
 
 export async function setupServer(app: FastifyInstance, bot: Bot<BotContext>) {
   // Register CORS plugin
@@ -22,7 +21,6 @@ export async function setupServer(app: FastifyInstance, bot: Bot<BotContext>) {
     // API routes
     await fastify.register(paramsRoutes, { prefix: '/api' });
     await fastify.register(loraRoutes, { prefix: '/api' });
-    await fastify.register(testRoutes, { prefix: '/api' });
 
     // Health check route
     fastify.get('/health', async () => {
