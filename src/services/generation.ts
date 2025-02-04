@@ -3,7 +3,10 @@ import { fal } from '@fal-ai/client';
 import type { GenerateImageParams, GenerationResponse } from '../types/generation';
 
 export async function generateImage(params: GenerateImageParams): Promise<GenerationResponse> {
-  const response = await fal.invoke<FalResponse>('fal-ai/flux-lora', {
+  console.log('FAL client:', fal);
+  console.log('FAL client methods:', Object.keys(fal));
+
+  const response = await (fal as any).invoke<FalResponse>('fal-ai/flux-lora', {
     prompt: params.prompt,
     loras: params.loras,
     image_size: params.imageSize || 'landscape_4_3',
