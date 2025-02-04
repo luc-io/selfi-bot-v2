@@ -78,7 +78,7 @@ composer.command("gen", hasSubscription, async (ctx) => {
       loras?: { path: string; scale: number }[];
     } | null;
 
-    const prompt = ctx.message.text.replace(/^\\/gen\\s+/, "").trim();
+    const prompt = ctx.message.text.replace(/^\/gen\s+/, "").trim();
     if (!prompt) {
       await ctx.reply("Please provide a prompt after the /gen command.");
       return;
