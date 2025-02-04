@@ -1,8 +1,9 @@
 import type { FalImage, FalResponse } from '@fal-ai/client';
 import { fal } from '@fal-ai/client';
+import type { GenerateImageParams, GenerationResponse } from '../types/generation';
 
 export async function generateImage(params: GenerateImageParams): Promise<GenerationResponse> {
-  const response = await fal.run('fal-ai/flux-lora', {
+  const response = await (fal as any).run('fal-ai/flux-lora', {
     prompt: params.prompt,
     loras: params.loras,
     image_size: params.imageSize || 'landscape_4_3',
