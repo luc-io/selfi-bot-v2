@@ -18,7 +18,7 @@ interface FalRequestParams {
 }
 
 export async function generateImage(params: GenerateImageParams): Promise<GenerationResponse> {
-  console.log('Generation params:', params);
+  console.log('Generation params:', JSON.stringify(params, null, 2));
   
   const requestParams: FalRequestParams = {
     input: {
@@ -30,7 +30,8 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
       num_images: params.numImages ?? 1,
       enable_safety_checker: params.enableSafetyChecker ?? true,
       output_format: params.outputFormat ?? 'jpeg'
-    }
+    },
+    logs: true // Enable FAL logs
   };
 
   if (params.loras && params.loras.length > 0) {
@@ -40,17 +41,27 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
     }));
   }
 
-  console.log('FAL params:', requestParams);
+  console.log('FAL request params:', JSON.stringify(requestParams, null, 2));
 
   const result = await fal.subscribe('fal-ai/flux-lora', requestParams);
-  const response = result.data;
+  console.log('FAL raw response:', JSON.stringify(result, null, 2));
 
-  return {
-    images: response.images.map((img: FalImage) => ({
+  const response = result.data;
+  console.log('FAL data response:', JSON.stringify(response, null, 2));
+
+  // Map all images from the response
+  const images = Array.isArray(response.images) ? response.images : [response.images];
+  
+  const generationResponse = {
+    images: images.map((img: FalImage) => ({
       url: img.url,
       contentType: `image/${params.outputFormat ?? 'jpeg'}`
     })),
     seed: response.seed,
     hasNsfwConcepts: response.has_nsfw_concepts || []
   };
+
+  console.log('Final generation response:', JSON.stringify(generationResponse, null, 2));
+
+  return generationResponse;
 }
