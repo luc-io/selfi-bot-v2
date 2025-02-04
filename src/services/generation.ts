@@ -1,6 +1,7 @@
 import type { FalImage, FalResponse } from '@fal-ai/client';
 import { fal } from '@fal-ai/client';
 import type { GenerateImageParams, GenerationResponse } from '../types/generation';
+import { logger } from '../lib/logger.js';
 
 interface FalRequestParams {
   input: {
@@ -18,7 +19,7 @@ interface FalRequestParams {
 }
 
 export async function generateImage(params: GenerateImageParams): Promise<GenerationResponse> {
-  console.log('Generation params:', JSON.stringify(params, null, 2));
+  logger.info({ params }, 'Starting image generation with params');
   
   const requestParams: FalRequestParams = {
     input: {
@@ -34,17 +35,19 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
     logs: true // Enable FAL logs
   };
 
+  // Add LoRA configuration if present
   if (params.loras && params.loras.length > 0) {
+    logger.info({ loras: params.loras }, 'Adding LoRA configuration');
     requestParams.input.loras = params.loras.map(lora => ({
-      path: lora.weightsUrl,
+      path: lora.path,  // Use path directly from the parameter
       scale: lora.scale
     }));
   }
 
-  console.log('FAL request params:', JSON.stringify(requestParams, null, 2));
+  logger.info({ requestParams }, 'Sending request to FAL');
 
   const result = await fal.run('fal-ai/flux-lora', requestParams);
-  console.log('FAL raw response:', JSON.stringify(result, null, 2));
+  logger.info({ result }, 'Received FAL response');
 
   // Extract images from result.data.images
   const images = Array.isArray(result.data.images) ? result.data.images : [result.data.images];
@@ -58,7 +61,7 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
     hasNsfwConcepts: result.data.has_nsfw_concepts || []
   };
 
-  console.log('Final generation response:', JSON.stringify(generationResponse, null, 2));
+  logger.info({ generationResponse }, 'Generation completed successfully');
 
   return generationResponse;
 }

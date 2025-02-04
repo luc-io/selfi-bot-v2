@@ -1,7 +1,7 @@
 export interface GenerateImageParams {
   prompt: string;
   loras?: {
-    weightsUrl: string;
+    path: string;  // Changed from weightsUrl to match the frontend
     scale: number;
   }[];
   imageSize?: string;
