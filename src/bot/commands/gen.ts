@@ -8,53 +8,66 @@ import { logger } from "../../lib/logger.js";
 
 const composer = new Composer<BotContext>();
 
-// Cache to prevent duplicate processing
-const processingCache = new Set<string>();
-
-// Clear old entries from cache every minute
-setInterval(() => {
-  processingCache.clear();
-}, 60000);
+// Store the last processed command for each chat
+const lastProcessed = new Map<number, { msgId: number; timestamp: number }>();
 
 composer.command("gen", hasSubscription, async (ctx) => {
-  // Only process text messages with the /gen command
-  if (!ctx.message?.text?.startsWith("/gen")) {
+  // Ensure this is a text message with the command
+  if (!ctx.message?.text || !ctx.message.text.startsWith("/gen")) {
     return;
   }
 
-  // Create a unique key for this request
-  const messageId = ctx.message.message_id;
   const chatId = ctx.chat.id;
-  const processingKey = `${chatId}:${messageId}:${Date.now()}`;
-  
-  // Check if this request is already being processed
-  if (processingCache.has(processingKey)) {
-    logger.info({
-      messageId,
-      chatId,
-      processingKey
-    }, "Skipping duplicate generation request");
-    return;
+  const messageId = ctx.message.message_id;
+  const now = Date.now();
+
+  // Check if we've recently processed a command from this chat
+  const last = lastProcessed.get(chatId);
+  if (last) {
+    if (messageId === last.msgId) {
+      logger.info({
+        chatId,
+        messageId,
+        lastMsgId: last.msgId,
+        timeDiff: now - last.timestamp
+      }, "Skipping duplicate command");
+      return;
+    }
+    // If it's a new message but within 5 seconds, ignore it
+    if (now - last.timestamp < 5000) {
+      logger.info({
+        chatId,
+        messageId,
+        lastMsgId: last.msgId,
+        timeDiff: now - last.timestamp
+      }, "Command too soon after last one");
+      return;
+    }
   }
 
-  // Add to processing cache
-  processingCache.add(processingKey);
-  
+  // Update last processed command
+  lastProcessed.set(chatId, { msgId: messageId, timestamp: now });
+
+  // Clear old entries every minute
+  setTimeout(() => {
+    const entry = lastProcessed.get(chatId);
+    if (entry?.msgId === messageId) {
+      lastProcessed.delete(chatId);
+    }
+  }, 60000);
+
   try {
     logger.info({
       messageId,
       chatId,
-      processingKey,
       command: ctx.message.text
     }, "Starting generation command");
 
-    // Get user's saved parameters
     const user = await prisma.user.findUnique({
       where: { telegramId: ctx.from?.id.toString() },
       include: { parameters: true }
     });
 
-    // Extract generation parameters from user settings
     const userParams = user?.parameters?.params as {
       image_size?: string;
       num_inference_steps?: number;
@@ -101,21 +114,16 @@ composer.command("gen", hasSubscription, async (ctx) => {
     logger.info({
       messageId,
       chatId,
-      processingKey,
       imagesCount: response.images.length
-    }, "Generation command completed");
+    }, "Generation command completed successfully");
 
   } catch (error) {
     logger.error({
       messageId,
       chatId,
-      processingKey,
       error
     }, "Generation command failed");
     handleError(ctx, error);
-  } finally {
-    // Remove from processing cache
-    processingCache.delete(processingKey);
   }
 });
 
