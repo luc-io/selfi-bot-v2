@@ -6,7 +6,8 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
   console.log('FAL client:', fal);
   console.log('FAL client methods:', Object.keys(fal));
 
-  const response = await (fal as any).invoke<FalResponse>('fal-ai/flux-lora', {
+  const falClient = fal as { invoke: (model: string, params: any) => Promise<FalResponse> };
+  const response = await falClient.invoke('fal-ai/flux-lora', {
     prompt: params.prompt,
     loras: params.loras,
     image_size: params.imageSize || 'landscape_4_3',
