@@ -1,4 +1,4 @@
-import { Composer } from "grammy";
+import { Composer, InputMediaBuilder } from "grammy";
 import { generateImage } from "../../services/generation.js";
 import { hasSubscription } from "../middlewares/subscription.js";
 import { handleError } from "../../utils/error.js";
@@ -35,7 +35,17 @@ composer.command("gen", hasSubscription, async (ctx) => {
       outputFormat: userParams?.output_format as 'jpeg' | 'png' | undefined,
     });
 
-    await ctx.replyWithPhoto(response.images[0].url);
+    // If there is only one image, use replyWithPhoto
+    if (response.images.length === 1) {
+      await ctx.replyWithPhoto(response.images[0].url);
+    } 
+    // If there are multiple images, use sendMediaGroup
+    else {
+      const mediaGroup = response.images.map(image => 
+        InputMediaBuilder.photo(image.url)
+      );
+      await ctx.replyWithMediaGroup(mediaGroup);
+    }
   } catch (error) {
     handleError(ctx, error);
   }
