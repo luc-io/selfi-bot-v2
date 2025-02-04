@@ -2,6 +2,7 @@ import type { FalImage, FalResponse } from '@fal-ai/client';
 import { fal } from '@fal-ai/client';
 import type { GenerateImageParams, GenerationResponse } from '../types/generation';
 import { logger } from '../lib/logger.js';
+import { prisma } from '../lib/prisma.js';
 
 interface FalRequestParams {
   input: {
@@ -32,16 +33,36 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
       enable_safety_checker: params.enableSafetyChecker ?? true,
       output_format: params.outputFormat ?? 'jpeg'
     },
-    logs: true // Enable FAL logs
+    logs: true
   };
 
   // Add LoRA configuration if present
   if (params.loras && params.loras.length > 0) {
-    logger.info({ loras: params.loras }, 'Adding LoRA configuration');
-    requestParams.input.loras = params.loras.map(lora => ({
-      path: lora.path,  // Use path directly from the parameter
-      scale: lora.scale
-    }));
+    const loraPromises = params.loras.map(async (lora) => {
+      // Get LoRA details from database
+      const loraModel = await prisma.loraModel.findUnique({
+        where: { databaseId: lora.path },
+        select: { weightsUrl: true }
+      });
+
+      if (!loraModel?.weightsUrl) {
+        logger.warn({ loraId: lora.path }, 'LoRA weights URL not found');
+        return null;
+      }
+
+      return {
+        path: loraModel.weightsUrl,
+        scale: lora.scale
+      };
+    });
+
+    const loraConfigs = await Promise.all(loraPromises);
+    const validLoraConfigs = loraConfigs.filter((config): config is { path: string; scale: number } => config !== null);
+
+    if (validLoraConfigs.length > 0) {
+      requestParams.input.loras = validLoraConfigs;
+      logger.info({ loras: validLoraConfigs }, 'Added LoRA configurations to request');
+    }
   }
 
   logger.info({ requestParams }, 'Sending request to FAL');
@@ -49,7 +70,6 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
   const result = await fal.run('fal-ai/flux-lora', requestParams);
   logger.info({ result }, 'Received FAL response');
 
-  // Extract images from result.data.images
   const images = Array.isArray(result.data.images) ? result.data.images : [result.data.images];
   
   const generationResponse = {
