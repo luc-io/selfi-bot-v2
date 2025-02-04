@@ -23,13 +23,13 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
   const requestParams: FalRequestParams = {
     input: {
       prompt: params.prompt,
-      image_size: params.imageSize || 'square',
-      num_inference_steps: params.numInferenceSteps || 28,
+      image_size: params.imageSize ?? 'square',
+      num_inference_steps: params.numInferenceSteps ?? 28,
       seed: params.seed,
-      guidance_scale: params.guidanceScale || 3.5,
-      num_images: params.numImages || 1,
+      guidance_scale: params.guidanceScale ?? 3.5,
+      num_images: params.numImages ?? 1,
       enable_safety_checker: params.enableSafetyChecker ?? true,
-      output_format: params.outputFormat || 'jpeg'
+      output_format: params.outputFormat ?? 'jpeg'
     }
   };
 
@@ -48,7 +48,7 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
   return {
     images: response.images.map((img: FalImage) => ({
       url: img.url,
-      contentType: `image/${params.outputFormat || 'jpeg'}`
+      contentType: `image/${params.outputFormat ?? 'jpeg'}`
     })),
     seed: response.seed,
     hasNsfwConcepts: response.has_nsfw_concepts || []
