@@ -1,8 +1,16 @@
 import { fal } from '@fal-ai/client';
 import type { GenerateImageParams, GenerationResponse } from '../types/generation';
 
+interface FalResponse {
+  images: Array<{
+    url: string;
+  }>;
+  seed: number;
+  has_nsfw_concepts?: boolean[];
+}
+
 export async function generateImage(params: GenerateImageParams): Promise<GenerationResponse> {
-  const response = await fal.invoke('fal-ai/flux-lora', {
+  const response = await fal.invoke<FalResponse>('fal-ai/flux-lora', {
     prompt: params.prompt,
     loras: params.loras,
     image_size: params.imageSize || 'landscape_4_3',
