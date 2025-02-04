@@ -1,9 +1,9 @@
-import { Router } from 'express';
+import { Request, Response, Router } from 'express';
 import { prisma } from '../../lib/prisma';
 
 const router = Router();
 
-router.get('/available', async (req, res) => {
+router.get('/available', async (req: Request, res: Response) => {
   try {
     const loras = await prisma.loraModel.findMany({
       where: {
