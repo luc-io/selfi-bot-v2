@@ -1,5 +1,5 @@
 import type { FalImage, FalResponse } from '@fal-ai/client';
-import { fal } from '@fal-ai/client';
+import fal from '@fal-ai/client';
 import type { GenerateImageParams, GenerationResponse } from '../types/generation';
 
 export async function generateImage(params: GenerateImageParams): Promise<GenerationResponse> {
