@@ -1,12 +1,22 @@
+import type { SingletonFalClient } from '@fal-ai/client';
 import { fal } from '@fal-ai/client';
 import type { GenerateImageParams, GenerationResponse } from '../types/generation';
 
-interface FalResponse {
-  images: Array<{
+// Define FAL client types
+declare module '@fal-ai/client' {
+  interface FalImage {
     url: string;
-  }>;
-  seed: number;
-  has_nsfw_concepts?: boolean[];
+  }
+
+  interface FalResponse {
+    images: FalImage[];
+    seed: number;
+    has_nsfw_concepts?: boolean[];
+  }
+
+  interface SingletonFalClient {
+    invoke<T>(model: string, params: any): Promise<T>;
+  }
 }
 
 export async function generateImage(params: GenerateImageParams): Promise<GenerationResponse> {
@@ -24,7 +34,7 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
   });
 
   return {
-    images: response.images.map(img => ({
+    images: response.images.map((img: FalImage) => ({
       url: img.url,
       contentType: `image/${params.outputFormat || 'jpeg'}`
     })),
