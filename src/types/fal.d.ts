@@ -10,7 +10,13 @@ declare module '@fal-ai/client' {
   }
 
   export interface FalClient {
-    invoke<T>(model: string, params: any): Promise<T>;
+    run(model: string, params: any): Promise<any>;
+    config: {
+      (opts: { credentials: string }): void;
+    };
+    storage: {
+      upload(file: Blob): Promise<string>;
+    };
   }
 
   export const fal: FalClient;
