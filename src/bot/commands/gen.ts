@@ -5,7 +5,7 @@ import { hasSubscription } from "../middlewares/subscription.js";
 import { handleError } from "../../utils/error.js";
 import { CommandContext } from "../../types/bot.js";
 
-export function setupGenCommand(bot: Bot, prisma: PrismaClient) {
+export default function setupGenCommand(bot: Bot, prisma: PrismaClient) {
   bot.command("gen", hasSubscription, async (ctx: CommandContext) => {
     try {
       const response = await generateImage({
