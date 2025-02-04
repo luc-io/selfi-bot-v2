@@ -27,7 +27,6 @@ composer.command('start', async (ctx) => {
     await ctx.reply(message, { parse_mode: 'Markdown' });
     logger.info({ telegramId }, 'Welcome message sent');
   } catch (error) {
-    // Improved error logging
     logger.error({
       err: error,
       telegramId: ctx.from.id.toString(),
