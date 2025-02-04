@@ -1,19 +1,8 @@
 import type { FalImage, FalResponse } from '@fal-ai/client';
-import * as falImport from '@fal-ai/client';
-import type { GenerateImageParams, GenerationResponse } from '../types/generation';
+import { fal } from '@fal-ai/client';
 
 export async function generateImage(params: GenerateImageParams): Promise<GenerationResponse> {
-  // Debug logging
-  console.log('FAL import:', falImport);
-  console.log('FAL import keys:', Object.keys(falImport));
-  console.log('FAL methods:', Object.getOwnPropertyNames(falImport));
-
-  // Try to get the client from import
-  const client = 'default' in falImport ? (falImport as any).default : falImport;
-  console.log('FAL client:', client);
-  console.log('FAL client methods:', Object.keys(client));
-
-  const response = await client.invoke('fal-ai/flux-lora', {
+  const response = await fal.run('fal-ai/flux-lora', {
     prompt: params.prompt,
     loras: params.loras,
     image_size: params.imageSize || 'landscape_4_3',
