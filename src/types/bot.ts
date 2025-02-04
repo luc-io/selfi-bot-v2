@@ -1,8 +1,3 @@
-import { Context, SessionFlavor } from 'grammy';
-import { User } from '@prisma/client';
+import { Context } from "grammy";
 
-interface SessionData {
-  userId?: string;
-}
-
-export type BotContext = Context & SessionFlavor<SessionData>;
+export type CommandContext = Context;
