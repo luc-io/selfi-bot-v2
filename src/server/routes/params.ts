@@ -1,13 +1,10 @@
 import { FastifyPluginAsync } from 'fastify';
 import { prisma } from '../../lib/prisma.js';
-import { Prisma } from '@prisma/client';
 import { logger } from '../../lib/logger.js';
 import { validateTelegramWebAppData } from '../../lib/telegram.js';
 
 interface ParameterRequestBody {
   model?: {
-    databaseId: string;
-    baseModelId: string;
     modelPath: string;
   };
   params: {
@@ -65,7 +62,7 @@ export const paramsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(401).send({ error: 'Invalid authentication' });
       }
 
-      // Extract user ID from init data
+      // Extract user ID from headers
       const telegramId = request.headers['x-telegram-user-id'] as string;
       if (!telegramId) {
         return reply.status(400).send({ error: 'Missing user ID' });
@@ -78,7 +75,7 @@ export const paramsRoutes: FastifyPluginAsync = async (fastify) => {
         update: {}
       });
 
-      // Save parameters
+      // Save parameters merging model and params into a single structure
       const savedParams = await prisma.userParameters.upsert({
         where: {
           userDatabaseId: user.databaseId
@@ -87,13 +84,13 @@ export const paramsRoutes: FastifyPluginAsync = async (fastify) => {
           user: { connect: { databaseId: user.databaseId } },
           params: {
             ...params,
-            model: model || null
+            modelPath: model?.modelPath || 'fal-ai/flux-lora'
           }
         },
         update: {
           params: {
             ...params,
-            model: model || null
+            modelPath: model?.modelPath || 'fal-ai/flux-lora'
           }
         }
       });
