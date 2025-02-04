@@ -75,9 +75,10 @@ composer.command("gen", hasSubscription, async (ctx) => {
       num_images?: number;
       enable_safety_checker?: boolean;
       output_format?: string;
+      loras?: { path: string; scale: number }[];
     } | null;
 
-    const prompt = ctx.message.text.replace(/^\/gen\s+/, "").trim();
+    const prompt = ctx.message.text.replace(/^\\/gen\\s+/, "").trim();
     if (!prompt) {
       await ctx.reply("Please provide a prompt after the /gen command.");
       return;
@@ -85,6 +86,9 @@ composer.command("gen", hasSubscription, async (ctx) => {
 
     // Send a "processing" message
     const processingMsg = await ctx.reply("🎨 Generating your art...");
+
+    // Log user parameters including LoRAs
+    logger.info({ userParams, prompt }, "Starting generation with parameters");
 
     const response = await generateImage({
       prompt,
@@ -94,6 +98,7 @@ composer.command("gen", hasSubscription, async (ctx) => {
       numImages: userParams?.num_images,
       enableSafetyChecker: userParams?.enable_safety_checker,
       outputFormat: userParams?.output_format as 'jpeg' | 'png' | undefined,
+      loras: userParams?.loras  // Add LoRA parameters
     });
 
     // Delete the processing message
