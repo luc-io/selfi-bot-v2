@@ -1,3 +1,8 @@
-import { Context } from "grammy";
+import { Context, SessionFlavor } from "grammy";
 
-export type CommandContext = Context;
+interface SessionData {
+  // Add session data here if needed
+}
+
+export type BotContext = Context & SessionFlavor<SessionData>;
+export type CommandContext = BotContext;
