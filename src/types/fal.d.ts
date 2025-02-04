@@ -9,7 +9,10 @@ declare module '@fal-ai/client' {
     has_nsfw_concepts?: boolean[];
   }
 
-  export interface SingletonFalClient {
+  export interface FalClient {
     invoke<T>(model: string, params: any): Promise<T>;
   }
+
+  const fal: FalClient;
+  export default fal;
 }
