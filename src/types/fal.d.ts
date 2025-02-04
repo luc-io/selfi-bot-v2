@@ -11,6 +11,7 @@ declare module '@fal-ai/client' {
 
   export interface FalClient {
     run(model: string, params: any): Promise<any>;
+    subscribe(model: string, params: any): Promise<{ data: FalResponse, requestId: string }>;
     config: {
       (opts: { credentials: string }): void;
     };
