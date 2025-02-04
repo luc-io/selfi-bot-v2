@@ -34,7 +34,10 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
   };
 
   if (params.loras && params.loras.length > 0) {
-    requestParams.input.loras = params.loras;
+    requestParams.input.loras = params.loras.map(lora => ({
+      path: lora.weightsUrl,
+      scale: lora.scale
+    }));
   }
 
   console.log('FAL params:', requestParams);
