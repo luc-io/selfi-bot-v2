@@ -22,9 +22,9 @@ composer.command('start', async (ctx) => {
     logger.info({ telegramId, stars: user.stars }, 'User retrieved/created');
     
     const username = ctx.from.username ? `@${ctx.from.username}` : 'there';
-    const message = `👋 Welcome ${username}!\n\nYou have ${user.stars} ⭐\n\n🌟 Here's what I can do for you:\n\n/gen - Generate a new image with AI\n/stars - Buy stars (currency for generations)\n/balance - Check your stars balance\n/help - Show all available commands\n\nEach image generation costs 1 star. Get started with the /stars command to purchase some stars!`;
+    const message = `👋 Welcome ${username}\\!\n\nYou have ${user.stars} ⭐\n\n🌟 Here's what I can do for you:\n\n/gen \\- Generate a new image with AI\n/stars \\- Buy stars \\(currency for generations\\)\n/balance \\- Check your stars balance\n/help \\- Show all available commands\n\nEach image generation costs 1 star\\. Get started with the /stars command to purchase some stars\\!`;
 
-    await ctx.reply(message, { parse_mode: 'Markdown' });
+    await ctx.reply(message, { parse_mode: 'MarkdownV2' });
     logger.info({ telegramId }, 'Welcome message sent');
   } catch (error) {
     logger.error({
