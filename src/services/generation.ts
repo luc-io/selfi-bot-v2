@@ -1,23 +1,6 @@
-import type { SingletonFalClient } from '@fal-ai/client';
+import type { FalImage, FalResponse } from '@fal-ai/client';
 import { fal } from '@fal-ai/client';
 import type { GenerateImageParams, GenerationResponse } from '../types/generation';
-
-// Define FAL client types
-declare module '@fal-ai/client' {
-  interface FalImage {
-    url: string;
-  }
-
-  interface FalResponse {
-    images: FalImage[];
-    seed: number;
-    has_nsfw_concepts?: boolean[];
-  }
-
-  interface SingletonFalClient {
-    invoke<T>(model: string, params: any): Promise<T>;
-  }
-}
 
 export async function generateImage(params: GenerateImageParams): Promise<GenerationResponse> {
   const response = await fal.invoke<FalResponse>('fal-ai/flux-lora', {
