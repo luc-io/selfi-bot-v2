@@ -53,18 +53,31 @@ async function main() {
     logger.info('Bot commands registered');
 
     // Setup server with webhook
-    const server = fastify();
+    const server = fastify({
+      logger: true
+    });
+
     setupServer(server, bot);
     logger.info('Server routes configured');
 
-    // Start server
-    await server.listen({
-      port: parseInt(config.PORT, 10),
-      host: '0.0.0.0'
-    });
-    logger.info(`Server started on port ${config.PORT}`);
+    // Connect to database first
+    const prisma = (await import('./lib/prisma.js')).prisma;
+    await prisma.$connect();
+    logger.info('Connected to database');
 
-    // Setup webhook
+    // Start server
+    server.listen({ 
+      port: parseInt(config.PORT, 10), 
+      host: '0.0.0.0',
+    }, (err: Error | null, address: string) => {
+      if (err) {
+        logger.error({ error: err }, 'Failed to start server');
+        process.exit(1);
+      }
+      logger.info(`Server started on ${address}`);
+    });
+
+    // Setup webhook after server is running
     const webhookSuccess = await setupWebhook(bot);
     if (!webhookSuccess) {
       logger.warn('Failed to set webhook, bot might not receive updates');
@@ -79,11 +92,6 @@ async function main() {
         msg: 'Bot error occurred'
       });
     });
-
-    // Log connection to database
-    const prisma = (await import('./lib/prisma.js')).prisma;
-    await prisma.$connect();
-    logger.info('Connected to database');
 
   } catch (error) {
     logger.error({ error }, 'Failed to start bot');
@@ -108,6 +116,12 @@ process.on('SIGTERM', async () => {
     logger.error('Error during shutdown:', error);
     process.exit(1);
   }
+});
+
+// Clean shutdown on interrupts
+process.on('SIGINT', () => {
+  logger.info('SIGINT received');
+  process.emit('SIGTERM', 'SIGINT');
 });
 
 // Start the bot
