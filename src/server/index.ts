@@ -26,18 +26,60 @@ export async function setupServer(server: FastifyInstance, bot: Bot<BotContext>)
     },
     handler: async (request, reply) => {
       try {
-        await bot.handleUpdate(request.body as any);
+        const update = request.body;
+        logger.debug({ update }, 'Received Telegram update');
+
+        await bot.handleUpdate(update);
+        logger.debug('Update handled successfully');
+
         reply.send({ ok: true });
       } catch (error) {
-        logger.error({ error }, 'Error handling bot update');
+        logger.error({ 
+          error, 
+          body: request.body,
+          headers: request.headers
+        }, 'Error handling bot update');
+        
         reply.code(500).send({ error: 'Failed to handle bot update' });
       }
     }
   });
 
+  server.get('/bot/health', async (_, reply) => {
+    try {
+      // Get webhook info
+      const webhookInfo = await bot.api.getWebhookInfo();
+      
+      // Check for any pending updates
+      const updates = await bot.api.getUpdates({ 
+        limit: 1, 
+        timeout: 1 
+      });
+
+      reply.send({
+        ok: true,
+        webhook: webhookInfo,
+        pendingUpdates: updates.length,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error({ error }, 'Health check failed');
+      reply.code(500).send({ 
+        ok: false,
+        error: 'Health check failed' 
+      });
+    }
+  });
+
   // Error handler
   server.setErrorHandler((error, request, reply) => {
-    logger.error({ error }, 'Server error occurred');
+    logger.error({ 
+      error,
+      method: request.method,
+      url: request.url,
+      body: request.body
+    }, 'Server error occurred');
+
     reply.status(500).send({ error: 'Internal server error' });
   });
 }
