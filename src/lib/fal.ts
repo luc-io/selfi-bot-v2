@@ -4,7 +4,7 @@ import { logger } from './logger.js';
 
 // Configure fal client with API key
 fal.config({
-  credentials: config.FAL_API_KEY
+  credentials: config.FAL_KEY
 });
 
 export interface TrainingOptions {
