@@ -17,7 +17,7 @@ const loras: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params as { id: string };
     try {
       const lora = await prisma.loraModel.findUnique({
-        where: { id }
+        where: { databaseId: id }
       });
       if (!lora) {
         reply.code(404).send({ error: 'LoRA not found' });
