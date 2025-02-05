@@ -5,10 +5,10 @@ import { logger } from '../lib/logger.js';
 import { BotContext } from '../types/bot.js';
 
 export function setupServer(server: FastifyInstance, bot: Bot<BotContext>) {
-  // Webhook endpoint
+  // Webhook endpoint - now matches the URL in setupWebhook
   server.post<{
     Body: Update
-  }>('/webhook', async (request: FastifyRequest<{
+  }>('/bot', async (request: FastifyRequest<{
     Body: Update
   }>, reply: FastifyReply) => {
     try {
