@@ -27,12 +27,28 @@ export interface TrainingResult {
   configUrl: string;
 }
 
+interface FalQueueSubmitResponse {
+  requestId: string;
+}
+
+interface FalQueueStatusResponse {
+  status: string;
+  logs?: Array<{ message: string }>;
+}
+
+interface FalQueueResultResponse {
+  data: {
+    diffusers_lora_file: { url: string };
+    config_file: { url: string };
+  };
+}
+
 const activeTrainings = new Map<string, TrainingProgress>();
 
 export async function startTraining(options: TrainingOptions): Promise<string> {
   try {
     // Start training with fal-ai
-    const { requestId } = await fal.queue.submit('fal-ai/flux-lora-fast-training', {
+    const response = await fal.subscribe('fal-ai/flux-lora-fast-training', {
       input: {
         steps: options.steps,
         is_style: options.isStyle,
@@ -40,7 +56,9 @@ export async function startTraining(options: TrainingOptions): Promise<string> {
         trigger_word: options.triggerWord,
         images_data_url: options.imagesDataUrl
       }
-    });
+    }) as FalQueueSubmitResponse;
+
+    const requestId = response.requestId;
 
     // Initialize training progress
     activeTrainings.set(requestId, {
@@ -66,67 +84,64 @@ async function monitorTrainingProgress(requestId: string) {
   try {
     while (true) {
       // Get current status
-      const status = await fal.queue.status('fal-ai/flux-lora-fast-training', {
-        requestId,
-        logs: true
-      });
+      const response = await fal.subscribe('fal-ai/flux-lora-fast-training', {
+        requestId: requestId,
+        pollInterval: 1000,
+        onQueueUpdate: (update: FalQueueStatusResponse) => {
+          if (!update.logs) return;
 
-      // Update progress based on logs
-      let progress = 0;
-      let message = '';
+          // Update progress based on logs
+          let progress = 0;
+          let message = '';
 
-      if (status.logs?.length) {
-        const progressLog = status.logs
-          .map(log => log.message)
-          .find(msg => msg?.includes('progress'));
+          const progressLog = update.logs
+            .map((log) => log.message)
+            .find((msg) => msg?.includes('progress'));
 
-        if (progressLog) {
-          const match = progressLog.match(/(\d+)%/);
-          if (match) {
-            progress = parseInt(match[1]);
+          if (progressLog) {
+            const match = progressLog.match(/(\d+)%/);
+            if (match) {
+              progress = parseInt(match[1]);
+            }
+          }
+
+          // Get last message
+          message = update.logs[update.logs.length - 1].message;
+
+          // Update status
+          let currentStatus: TrainingProgress['status'] = 'training';
+          if (update.status === 'COMPLETED') {
+            currentStatus = 'completed';
+            activeTrainings.set(requestId, {
+              status: 'completed',
+              progress: 100,
+              message: 'Training completed successfully'
+            });
+
+            // Clean up after delay
+            setTimeout(() => {
+              activeTrainings.delete(requestId);
+            }, 60 * 1000); // Remove after 1 minute
+          } else if (update.status === 'FAILED') {
+            currentStatus = 'failed';
+            activeTrainings.set(requestId, {
+              status: 'failed',
+              progress,
+              message: 'Training failed'
+            });
+          } else {
+            // Update training status
+            activeTrainings.set(requestId, {
+              status: currentStatus,
+              progress,
+              message
+            });
           }
         }
-
-        // Get last message
-        message = status.logs[status.logs.length - 1].message;
-      }
-
-      // Update status
-      let currentStatus: TrainingProgress['status'] = 'training';
-      if (status.status === 'COMPLETED') {
-        currentStatus = 'completed';
-        
-        activeTrainings.set(requestId, {
-          status: 'completed',
-          progress: 100,
-          message: 'Training completed successfully'
-        });
-
-        // Clean up after delay
-        setTimeout(() => {
-          activeTrainings.delete(requestId);
-        }, 60 * 1000); // Remove after 1 minute
-
-        break;
-      } else if (status.status === 'FAILED') {
-        currentStatus = 'failed';
-        activeTrainings.set(requestId, {
-          status: 'failed',
-          progress,
-          message: 'Training failed'
-        });
-        break;
-      }
-
-      // Update training status
-      activeTrainings.set(requestId, {
-        status: currentStatus,
-        progress,
-        message
       });
 
-      // Wait before next check
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // If we get here, the subscription has ended
+      break;
     }
   } catch (error) {
     logger.error({ error, requestId }, 'Error monitoring training progress');
