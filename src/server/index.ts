@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { Bot } from 'grammy';
+import { Bot, Update } from 'grammy';
 import { BotContext } from '../types/bot.js';
 import cors from '@fastify/cors';
 import { config } from '../config.js';
@@ -30,7 +30,7 @@ export async function setupServer(server: FastifyInstance, bot: Bot<BotContext>)
   await server.register(training);
 
   // Bot webhook endpoint
-  server.post('/bot', async (request, reply) => {
+  server.post<{ Body: Update }>('/bot', async (request, reply) => {
     try {
       const update = request.body;
       logger.debug({ update }, 'Received Telegram update');
