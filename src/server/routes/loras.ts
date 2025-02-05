@@ -34,6 +34,7 @@ export async function loraRoutes(app: FastifyInstance) {
           databaseId: true,
           name: true,
           triggerWord: true,
+          weightsUrl: true,
           status: true,
           isPublic: true
         },
@@ -42,6 +43,7 @@ export async function loraRoutes(app: FastifyInstance) {
         }
       });
       
+      logger.info({ count: loras.length }, 'Fetched available LoRAs');
       return loras;
     } catch (error) {
       logger.error({ error }, 'Failed to fetch available LoRAs');
@@ -54,20 +56,19 @@ export async function loraRoutes(app: FastifyInstance) {
     schema: {
       headers: {
         type: 'object',
-        required: ['x-telegram-user-id', 'x-telegram-init-data'],
+        required: ['x-telegram-user-id'],
         properties: {
-          'x-telegram-user-id': { type: 'string' },
-          'x-telegram-init-data': { type: 'string' }
+          'x-telegram-user-id': { type: 'string' }
         }
       }
     }
   }, async (request, reply) => {
     try {
-      const initData = request.headers['x-telegram-init-data'] as string;
       const telegramId = request.headers['x-telegram-user-id'] as string;
 
-      if (!initData || !validateTelegramWebAppData(initData)) {
-        return reply.status(401).send({ error: 'Invalid authentication' });
+      if (!telegramId) {
+        logger.warn('Missing user ID in request');
+        return reply.status(400).send({ error: 'Missing user ID' });
       }
 
       const user = await prisma.user.findUnique({
@@ -99,10 +100,87 @@ export async function loraRoutes(app: FastifyInstance) {
         }
       });
 
+      logger.info({
+        userDatabaseId: user.databaseId,
+        count: loras.length
+      }, 'Fetched user LoRAs');
+
       return loras;
     } catch (error) {
       logger.error({ error }, 'Failed to fetch user LoRAs');
       reply.status(500).send({ error: 'Failed to fetch user LoRAs' });
+    }
+  });
+
+  // Toggle LoRA public status
+  app.post('/loras/:id/toggle-public', {
+    schema: {
+      headers: {
+        type: 'object',
+        required: ['x-telegram-user-id'],
+        properties: {
+          'x-telegram-user-id': { type: 'string' }
+        }
+      },
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string' }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['isPublic'],
+        properties: {
+          isPublic: { type: 'boolean' }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const { isPublic } = request.body as { isPublic: boolean };
+      const telegramId = request.headers['x-telegram-user-id'] as string;
+
+      if (!telegramId) {
+        return reply.status(400).send({ error: 'Missing user ID' });
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { telegramId },
+        select: { databaseId: true }
+      });
+
+      if (!user) {
+        return reply.status(404).send({ error: 'User not found' });
+      }
+
+      const lora = await prisma.loraModel.findFirst({
+        where: {
+          databaseId: id,
+          userDatabaseId: user.databaseId
+        }
+      });
+
+      if (!lora) {
+        return reply.status(404).send({ error: 'LoRA not found or not owned by user' });
+      }
+
+      const updatedLora = await prisma.loraModel.update({
+        where: { databaseId: id },
+        data: { isPublic }
+      });
+
+      logger.info({
+        loraId: id,
+        isPublic
+      }, 'LoRA public status updated');
+
+      return updatedLora;
+    } catch (error) {
+      logger.error({ error }, 'Failed to toggle LoRA public status');
+      reply.status(500).send({ error: 'Failed to toggle LoRA public status' });
     }
   });
 
