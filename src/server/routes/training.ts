@@ -1,158 +1,139 @@
-import { FastifyPluginAsync } from 'fastify';
-import { startTraining, getTrainingProgress } from '../../lib/fal.js';
-import { fal } from '@fal-ai/client';
-import JSZip from 'jszip';
+import { FastifyInstance } from 'fastify';
+import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
-import { Readable } from 'node:stream';
-import { MultipartFile } from '@fastify/multipart';
+import { LoraStatus } from '@prisma/client';
+import { config } from '../../config.js';
 
-interface MultipartData {
-  fields: {
-    steps: string;
-    isStyle: string;
-    createMasks: string;
-    triggerWord: string;
-    captions: string;
-  };
-  files: MultipartFile[];
+interface TrainingStartRequest {
+  name: string;
+  instancePrompt: string;
+  classPrompt?: string;
+  steps?: number;
+  learningRate?: number;
 }
 
-interface FalTrainingResult {
-  data: {
-    diffusers_lora_file: {
-      url: string;
-    };
-    config_file: {
-      url: string;
-    };
-  };
-}
-
-const training: FastifyPluginAsync = async (fastify) => {
-  // Register multipart support
-  await fastify.register(import('@fastify/multipart'), {
-    limits: {
-      fileSize: 50 * 1024 * 1024 // 50MB
-    }
-  });
-
+export async function trainingRoutes(app: FastifyInstance) {
   // Start training
-  fastify.post('/training/start', async (request, reply) => {
+  app.post('/training/start', {
+    schema: {
+      headers: {
+        type: 'object',
+        required: ['x-telegram-user-id'],
+        properties: {
+          'x-telegram-user-id': { type: 'string' }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['name', 'instancePrompt'],
+        properties: {
+          name: { type: 'string' },
+          instancePrompt: { type: 'string' },
+          classPrompt: { type: 'string' },
+          steps: { type: 'number' },
+          learningRate: { type: 'number' }
+        }
+      }
+    }
+  }, async (request, reply) => {
     try {
-      const parts = await request.parts();
-      const data: MultipartData = {
-        fields: {
-          steps: '',
-          isStyle: 'false',
-          createMasks: 'true',
-          triggerWord: '',
-          captions: '{}'
+      const telegramId = request.headers['x-telegram-user-id'] as string;
+      const params = request.body as TrainingStartRequest;
+
+      if (!telegramId) {
+        return reply.status(400).send({ error: 'Missing user ID' });
+      }
+
+      // Get user
+      const user = await prisma.user.findUnique({
+        where: { telegramId }
+      });
+
+      if (!user) {
+        return reply.status(404).send({ error: 'User not found' });
+      }
+
+      // Find base model
+      const baseModel = await prisma.baseModel.findFirst({
+        where: { modelPath: 'fal-ai/flux-lora' }
+      });
+
+      if (!baseModel) {
+        return reply.status(500).send({ error: 'Base model not found' });
+      }
+
+      // Create LoRA model
+      const lora = await prisma.loraModel.create({
+        data: {
+          name: params.name,
+          triggerWord: params.name.toLowerCase().replace(/[^\w\s]/g, ''),
+          baseModelId: baseModel.databaseId,
+          userDatabaseId: user.databaseId,
+          status: LoraStatus.PENDING
         },
-        files: []
-      };
-
-      // Process all parts
-      for await (const part of parts) {
-        if (part.type === 'file') {
-          data.files.push(part);
-        } else if (part.fieldname in data.fields) {
-          // This cast is safe because we check fieldname
-          const fieldName = part.fieldname as keyof typeof data.fields;
-          data.fields[fieldName] = part.value as string;
+        include: {
+          training: true
         }
-      }
-
-      // Parse captions
-      const captions = JSON.parse(data.fields.captions);
-
-      // Create ZIP file
-      const zip = new JSZip();
-      
-      // Add images and caption files to ZIP
-      for (const file of data.files) {
-        const buffer = await file.toBuffer();
-        zip.file(file.filename, buffer);
-
-        // Add caption file if exists
-        const caption = captions[file.filename];
-        if (caption) {
-          const captionFileName = file.filename.replace(/\.[^/.]+$/, '.txt');
-          zip.file(captionFileName, caption);
-        }
-      }
-
-      // Generate ZIP buffer
-      const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
-      const zipBlob = new Blob([zipBuffer], { type: 'application/zip' });
-      const zipFile = new File([zipBlob], 'training_images.zip', { type: 'application/zip' });
-
-      // Upload ZIP to fal storage
-      const imagesDataUrl = await fal.storage.upload(zipFile);
-
-      // Start training
-      const requestId = await startTraining({
-        steps: parseInt(data.fields.steps),
-        isStyle: data.fields.isStyle === 'true',
-        createMasks: data.fields.createMasks === 'true',
-        triggerWord: data.fields.triggerWord,
-        imagesDataUrl
       });
 
-      reply.send({ requestId });
-
-    } catch (error) {
-      logger.error({ error }, 'Error starting training');
-      reply.code(500).send({ error: 'Failed to start training' });
-    }
-  });
-
-  // Get training progress
-  fastify.get<{
-    Params: { requestId: string }
-  }>('/training/:requestId/progress', async (request, reply) => {
-    const { requestId } = request.params;
-    
-    try {
-      const progress = getTrainingProgress(requestId);
-      
-      if (!progress) {
-        reply.code(404).send({ error: 'Training not found' });
-        return;
-      }
-
-      reply.send(progress);
-
-    } catch (error) {
-      logger.error({ error, requestId }, 'Error getting training progress');
-      reply.code(500).send({ error: 'Failed to get training progress' });
-    }
-  });
-
-  // Get training result
-  fastify.get<{
-    Params: { requestId: string }
-  }>('/training/:requestId/result', async (request, reply) => {
-    const { requestId } = request.params;
-    
-    try {
-      const result = await fal.subscribe('fal-ai/flux-lora-fast-training', { requestId }) as unknown as FalTrainingResult;
-
-      if (!result?.data) {
-        reply.code(404).send({ error: 'Training result not found' });
-        return;
-      }
-
-      reply.send({
-        requestId,
-        loraUrl: result.data.diffusers_lora_file.url,
-        configUrl: result.data.config_file.url
+      // Create training record
+      const training = await prisma.training.create({
+        data: {
+          loraId: lora.databaseId,
+          baseModelId: baseModel.databaseId,
+          userDatabaseId: user.databaseId,
+          instancePrompt: params.instancePrompt,
+          classPrompt: params.classPrompt,
+          steps: params.steps || config.DEFAULT_TRAINING_STEPS,
+          learningRate: params.learningRate || 0.0001,
+          starsSpent: 100, // TODO: Make configurable
+          imageUrls: [], // Will be populated during training
+        }
       });
 
+      logger.info({
+        loraId: lora.databaseId,
+        trainingId: training.databaseId,
+        userId: user.databaseId
+      }, 'Training started');
+
+      return reply.send({
+        id: lora.databaseId,
+        trainingId: training.databaseId
+      });
     } catch (error) {
-      logger.error({ error, requestId }, 'Error getting training result');
-      reply.code(500).send({ error: 'Failed to get training result' });
+      logger.error({ error }, 'Failed to start training');
+      reply.status(500).send({ error: 'Failed to start training' });
     }
   });
-};
 
-export default training;
+  // Get training status
+  app.get('/training/:id/status', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+
+      const training = await prisma.training.findFirst({
+        where: { loraId: id },
+        include: {
+          lora: true
+        }
+      });
+
+      if (!training) {
+        return reply.status(404).send({ error: 'Training not found' });
+      }
+
+      return reply.send({
+        status: training.lora.status,
+        metadata: training.metadata,
+        error: training.error,
+        completedAt: training.completedAt
+      });
+    } catch (error) {
+      logger.error({ error }, 'Failed to get training status');
+      reply.status(500).send({ error: 'Failed to get training status' });
+    }
+  });
+
+  logger.info('Training routes registered');
+}
