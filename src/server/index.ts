@@ -3,19 +3,31 @@ import { Update } from '@grammyjs/types';
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { logger } from '../lib/logger.js';
 import { BotContext } from '../types/bot.js';
+import { setupApiRoutes } from './api/index.js';
 
-export function setupServer(server: FastifyInstance, bot: Bot<BotContext>) {
+export async function setupServer(server: FastifyInstance, bot: Bot<BotContext>) {
   if (!bot) {
     throw new Error('Bot instance must be provided to setupServer');
   }
 
+  // Enable CORS for the miniapp
+  await server.register(import('@fastify/cors'), {
+    origin: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type']
+  });
+
   // Add request hook to validate bot is initialized
   server.addHook('preHandler', async (request, reply) => {
-    if (!bot.isInited()) {
+    if (request.url.startsWith('/bot') && !bot.isInited()) {
       logger.error('Bot not initialized when handling request');
       throw new Error('Bot not initialized');
     }
   });
+
+  // Register API routes
+  await setupApiRoutes(server);
+  logger.info('API routes configured');
 
   // Webhook endpoint
   server.post<{
