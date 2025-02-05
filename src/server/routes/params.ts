@@ -16,6 +16,10 @@ interface ParameterRequestBody {
     sync_mode?: boolean;
     enable_safety_checker?: boolean;
     output_format?: string;
+    loras?: Array<{
+      path: string;
+      scale: number;
+    }>;
   };
 }
 
