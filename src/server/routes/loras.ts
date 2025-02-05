@@ -4,7 +4,7 @@ import { prisma } from '../../lib/prisma.js';
 const loras: FastifyPluginAsync = async (fastify) => {
   fastify.get('/api/loras', async (_, reply) => {
     try {
-      const loras = await prisma.lora.findMany({
+      const loras = await prisma.loraModel.findMany({
         orderBy: { createdAt: 'desc' }
       });
       reply.send(loras);
@@ -16,7 +16,7 @@ const loras: FastifyPluginAsync = async (fastify) => {
   fastify.get('/api/loras/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
     try {
-      const lora = await prisma.lora.findUnique({
+      const lora = await prisma.loraModel.findUnique({
         where: { id }
       });
       if (!lora) {
