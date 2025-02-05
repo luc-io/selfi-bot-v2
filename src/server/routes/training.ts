@@ -2,7 +2,6 @@ import { FastifyInstance } from 'fastify';
 import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
 import { LoraStatus } from '@prisma/client';
-import { config } from '../../config.js';
 
 interface TrainingStartRequest {
   name: string;
@@ -11,6 +10,10 @@ interface TrainingStartRequest {
   steps?: number;
   learningRate?: number;
 }
+
+// Default values when not provided in the request
+const DEFAULT_TRAINING_STEPS = 600;
+const DEFAULT_LEARNING_RATE = 0.0001;
 
 export async function trainingRoutes(app: FastifyInstance) {
   // Start training
@@ -84,8 +87,8 @@ export async function trainingRoutes(app: FastifyInstance) {
           userDatabaseId: user.databaseId,
           instancePrompt: params.instancePrompt,
           classPrompt: params.classPrompt,
-          steps: params.steps || config.DEFAULT_TRAINING_STEPS,
-          learningRate: params.learningRate || 0.0001,
+          steps: params.steps || DEFAULT_TRAINING_STEPS,
+          learningRate: params.learningRate || DEFAULT_LEARNING_RATE,
           starsSpent: 100, // TODO: Make configurable
           imageUrls: [], // Will be populated during training
         }
