@@ -11,7 +11,8 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "allowJs": true,
-    "moduleDetection": "force"
+    "moduleDetection": "force",
+    "types": ["node", "@grammyjs/types"]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules"]

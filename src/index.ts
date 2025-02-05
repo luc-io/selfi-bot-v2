@@ -1,4 +1,4 @@
-import { Bot, BotConfig } from 'grammy';
+import { Bot } from 'grammy';
 import { BotContext } from './types/bot.js';
 import { config } from './config.js';
 import { fastify } from 'fastify';
@@ -14,8 +14,18 @@ async function setupWebhook(bot: Bot<BotContext>): Promise<boolean> {
     await bot.api.deleteWebhook();
     logger.info('Existing webhook deleted');
 
+    // Register bot commands
+    await bot.api.setMyCommands([
+      { command: 'start', description: 'Start the bot' },
+      { command: 'gen', description: 'Generate a new image with AI' },
+      { command: 'stars', description: 'Buy stars (currency for generations)' },
+      { command: 'balance', description: 'Check your stars balance' },
+      { command: 'help', description: 'Show all available commands' }
+    ]);
+    logger.info('Bot commands registered with Telegram');
+
     // Try to set the webhook
-    const webhookUrl = 'https://selfi-dev.blackiris.art/bot';
+    const webhookUrl = `${config.PUBLIC_URL || 'https://selfi-dev.blackiris.art'}/bot`;
     const webhookResponse = await bot.api.setWebhook(webhookUrl, {
       drop_pending_updates: true,
       allowed_updates: ['message', 'callback_query', 'pre_checkout_query']
@@ -38,44 +48,68 @@ async function setupWebhook(bot: Bot<BotContext>): Promise<boolean> {
 }
 
 async function main() {
-  // Initialize bot
-  const bot = new Bot<BotContext>(config.TELEGRAM_BOT_TOKEN);
-  logger.info('Bot instance created');
+  try {
+    // Initialize bot with error handling
+    let bot: Bot<BotContext>;
+    try {
+      bot = new Bot<BotContext>(config.TELEGRAM_BOT_TOKEN);
+      await bot.init();
+      logger.info('Bot instance created and initialized');
 
-  // Add middleware
-  bot.api.config.use(autoRetry());
-  bot.api.config.use(parseMode('HTML'));
-  logger.info('Bot middleware configured');
+      // Add middleware
+      bot.api.config.use(autoRetry());
+      bot.api.config.use(parseMode('HTML'));
+      logger.info('Bot middleware configured');
 
-  // Register commands
-  bot.use(commands);
-  logger.info('Bot commands registered');
+      // Register commands
+      bot.use(commands);
+      logger.info('Bot commands registered');
+    } catch (error) {
+      logger.error({ error }, 'Failed to initialize bot');
+      throw error;
+    }
 
-  // Setup server with webhook
-  const server = fastify();
-  setupServer(server, bot);
-  logger.info('Server routes configured');
+    // Connect to database first
+    const prisma = (await import('./lib/prisma.js')).prisma;
+    await prisma.$connect();
+    logger.info('Connected to database');
 
-  // Start server
-  await server.listen({
-    port: parseInt(config.PORT, 10),
-    host: '0.0.0.0'
-  });
-  logger.info(`Server started on port ${config.PORT}`);
-
-  // Setup webhook
-  const webhookSuccess = await setupWebhook(bot);
-  if (!webhookSuccess) {
-    logger.warn('Failed to set webhook, bot might not receive updates');
-  }
-
-  // Error handling
-  bot.catch((err) => {
-    logger.error({
-      error: err,
-      msg: 'Bot error occurred'
+    // Setup server with webhook
+    const server = fastify({
+      logger: true
     });
-  });
+
+    // Setup server routes with initialized bot
+    setupServer(server, bot);
+    logger.info('Server routes configured');
+
+    // Start server
+    await server.listen({ 
+      port: parseInt(config.PORT, 10), 
+      host: '0.0.0.0',
+    });
+    logger.info(`Server started on http://0.0.0.0:${config.PORT}`);
+
+    // Setup webhook after server is running
+    const webhookSuccess = await setupWebhook(bot);
+    if (!webhookSuccess) {
+      logger.warn('Failed to set webhook, bot might not receive updates');
+    } else {
+      logger.info('Webhook setup successful');
+    }
+
+    // Error handling for bot
+    bot.catch((err) => {
+      logger.error({
+        error: err,
+        msg: 'Bot error occurred'
+      });
+    });
+
+  } catch (error) {
+    logger.error({ error }, 'Failed to start bot');
+    process.exit(1);
+  }
 }
 
 // Handle shutdown
@@ -85,11 +119,22 @@ process.on('SIGTERM', async () => {
     const bot = new Bot<BotContext>(config.TELEGRAM_BOT_TOKEN);
     await bot.api.deleteWebhook();
     logger.info('Webhook deleted');
+
+    const prisma = (await import('./lib/prisma.js')).prisma;
+    await prisma.$disconnect();
+    logger.info('Disconnected from database');
+
     process.exit(0);
   } catch (error) {
     logger.error('Error during shutdown:', error);
     process.exit(1);
   }
+});
+
+// Clean shutdown on interrupts
+process.on('SIGINT', () => {
+  logger.info('SIGINT received');
+  process.emit('SIGTERM', 'SIGINT');
 });
 
 // Start the bot

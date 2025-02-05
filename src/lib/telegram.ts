@@ -1,33 +1,47 @@
-import crypto from 'crypto';
 import { config } from '../config.js';
+import { createHmac } from 'crypto';
+import { logger } from './logger.js';
 
+/**
+ * Validates Telegram Web App init data
+ * @param initData - Raw init data string from Telegram Web App
+ * @returns boolean indicating if the data is valid
+ */
 export function validateTelegramWebAppData(initData: string): boolean {
   try {
-    const urlParams = new URLSearchParams(initData);
-    const hash = urlParams.get('hash');
-    if (!hash) return false;
+    // Parse the init data
+    const searchParams = new URLSearchParams(initData);
+    const hash = searchParams.get('hash');
+    searchParams.delete('hash');
 
-    // Remove hash from initData
-    urlParams.delete('hash');
-
-    // Sort parameters alphabetically
-    const params = Array.from(urlParams.entries())
+    // Sort params alphabetically
+    const params = Array.from(searchParams.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([key, value]) => `${key}=${value}`)
       .join('\n');
 
-    // Calculate HMAC-SHA256
-    const secret = crypto.createHmac('sha256', 'WebAppData')
+    // Calculate the hash
+    const secret = createHmac('sha256', 'WebAppData')
       .update(config.TELEGRAM_BOT_TOKEN)
       .digest();
 
-    const calculatedHash = crypto.createHmac('sha256', secret)
+    const calculatedHash = createHmac('sha256', secret)
       .update(params)
       .digest('hex');
 
-    return calculatedHash === hash;
+    // Compare hashes
+    const valid = hash === calculatedHash;
+    if (!valid) {
+      logger.warn({
+        hash,
+        calculatedHash,
+        params
+      }, 'Invalid Telegram Web App init data');
+    }
+    
+    return valid;
   } catch (error) {
-    console.error('Error validating Telegram Web App data:', error);
+    logger.error({ error }, 'Error validating Telegram Web App init data');
     return false;
   }
 }
