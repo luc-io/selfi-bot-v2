@@ -1,49 +1,29 @@
 import { Bot } from 'grammy';
 import { Update } from '@grammyjs/types';
-import { FastifyInstance } from 'fastify';
-import fastify from 'fastify';
-import cors from '@fastify/cors';
-import { config } from '../config/index.js';
+import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { logger } from '../lib/logger.js';
+import { BotContext } from '../types/bot.js';
 
-export async function setupServer(bot: Bot) {
-  const app: FastifyInstance = fastify({
-    logger: {
-      transport: {
-        target: 'pino-pretty',
-      },
-    },
-  });
-
-  // Register plugins
-  await app.register(cors);
-
-  // Health check endpoint
-  app.get('/ping', async (request, reply) => {
-    return reply.status(200).send({ status: 'ok' });
-  });
-
-  // Telegram webhook endpoint
-  app.post('/webhook', async (request, reply) => {
-    const update = request.body as Update;
+export function setupServer(server: FastifyInstance, bot: Bot<BotContext>) {
+  // Webhook endpoint
+  server.post<{
+    Body: Update
+  }>('/webhook', async (request: FastifyRequest<{
+    Body: Update
+  }>, reply: FastifyReply) => {
     try {
-      await bot.handleUpdate(update);
+      await bot.handleUpdate(request.body);
       return reply.status(200).send();
     } catch (error) {
-      console.error('Error handling update:', error);
+      logger.error('Error handling update:', error);
       return reply.status(500).send();
     }
   });
 
-  // Start server
-  try {
-    const port = Number(config.PORT) || 3000;
-    const host = '0.0.0.0';
-    await app.listen({ port, host });
-    console.log(`Server is running on http://${host}:${port}`);
-  } catch (err) {
-    app.log.error(err);
-    process.exit(1);
-  }
+  // Health check endpoint
+  server.get('/ping', async (request, reply) => {
+    return reply.status(200).send({ status: 'ok' });
+  });
 
-  return app;
+  return server;
 }
