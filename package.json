@@ -8,14 +8,21 @@
     "start": "node dist/index.js",
     "build": "tsc",
     "lint": "eslint src --ext .ts",
-    "format": "prettier --write src/**/*.ts"
+    "format": "prettier --write src/**/*.ts",
+    "clean": "rimraf dist",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate deploy"
   },
   "dependencies": {
     "@fal-ai/client": "^1.2.3",
-    "@fastify/cors": "^9.0.0",
-    "@fastify/multipart": "^8.0.0",
+    "@fastify/cors": "^8.3.0",
+    "@fastify/multipart": "^8.3.1",
     "@grammyjs/auto-retry": "^1.1.1",
     "@grammyjs/parse-mode": "^1.8.0",
+    "@grammyjs/runner": "^2.0.3",
+    "@prisma/client": "^5.22.0",
+    "aws-sdk": "^2.1692.0",
+    "dotenv": "^16.4.7",
     "fastify": "^4.25.2",
     "grammy": "^1.20.3",
     "jszip": "^3.10.1",
@@ -24,11 +31,16 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@types/express": "^5.0.0",
     "@types/node": "^20.10.0",
     "@typescript-eslint/eslint-plugin": "^6.18.0",
     "@typescript-eslint/parser": "^6.18.0",
     "eslint": "^8.56.0",
     "prettier": "^3.1.0",
+    "prisma": "^5.22.0",
+    "rimraf": "^5.0.10",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.0"
   }
