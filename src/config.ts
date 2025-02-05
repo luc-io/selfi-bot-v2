@@ -4,7 +4,7 @@ const configSchema = z.object({
   // Server
   PORT: z.string().default('3000'),
   NODE_ENV: z.enum(['development', 'production']).default('development'),
-  PUBLIC_URL: z.string(),
+  PUBLIC_URL: z.string().optional(), // Made optional
   MINIAPP_URL: z.string(),
 
   // Telegram
@@ -13,7 +13,7 @@ const configSchema = z.object({
 
   // FAL AI
   FAL_KEY: z.string(),
-  FAL_KEY_SECRET: z.string(),
+  FAL_KEY_SECRET: z.string().optional(), // Made optional as it might be combined with FAL_KEY
 
   // Database
   DATABASE_URL: z.string(),
