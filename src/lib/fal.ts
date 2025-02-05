@@ -49,7 +49,7 @@ export async function startTraining(options: TrainingOptions): Promise<string> {
     });
 
     // Start monitoring progress
-    monitorTrainingProgress(requestId);
+    void monitorTrainingProgress(requestId);
 
     return requestId;
   } catch (error) {
@@ -72,16 +72,23 @@ async function monitorTrainingProgress(requestId: string) {
       });
 
       // Update progress based on logs
-      const progressLog = status.logs
-        ?.map((log) => log.message)
-        .find(msg => msg?.includes('progress'));
-
       let progress = 0;
-      if (progressLog) {
-        const match = progressLog.match(/(\d+)%/);
-        if (match) {
-          progress = parseInt(match[1]);
+      let message = '';
+
+      if (status.logs?.length) {
+        const progressLog = status.logs
+          .map(log => log.message)
+          .find(msg => msg?.includes('progress'));
+
+        if (progressLog) {
+          const match = progressLog.match(/(\d+)%/);
+          if (match) {
+            progress = parseInt(match[1]);
+          }
         }
+
+        // Get last message
+        message = status.logs[status.logs.length - 1].message;
       }
 
       // Update status
@@ -89,11 +96,6 @@ async function monitorTrainingProgress(requestId: string) {
       if (status.status === 'COMPLETED') {
         currentStatus = 'completed';
         
-        // Get result and store URLs
-        const result = await fal.queue.result('fal-ai/flux-lora-fast-training', {
-          requestId
-        });
-
         activeTrainings.set(requestId, {
           status: 'completed',
           progress: 100,
@@ -120,7 +122,7 @@ async function monitorTrainingProgress(requestId: string) {
       activeTrainings.set(requestId, {
         status: currentStatus,
         progress,
-        message: status.logs?.[status.logs.length - 1]?.message
+        message
       });
 
       // Wait before next check
