@@ -1,28 +1,21 @@
 import { z } from 'zod';
-import 'dotenv/config';
 
 const configSchema = z.object({
-  NODE_ENV: z.enum(['development', 'production']).default('development'),
   PORT: z.string().default('3000'),
-  PUBLIC_URL: z.string().optional(),
-  
-  // Bot
+  NODE_ENV: z.enum(['development', 'production']).default('development'),
   TELEGRAM_BOT_TOKEN: z.string(),
-  TELEGRAM_PAYMENT_TOKEN: z.string().optional(),
-  MINIAPP_URL: z.string().default('https://selfi-dev.blackiris.art'),
-  
-  // Database
-  DATABASE_URL: z.string(),
-  
-  // Storage 
-  SPACES_BUCKET: z.string(),
-  SPACES_ENDPOINT: z.string(),
-  SPACES_KEY: z.string(),
-  SPACES_SECRET: z.string(),
-  
-  // FAL
-  FAL_KEY: z.string(),
-  FAL_KEY_SECRET: z.string(),
+  FAL_API_KEY: z.string(),
+  ALLOWED_ORIGINS: z.array(z.string()).default(['http://localhost:5173']),
 });
 
-export const config = configSchema.parse(process.env);
+// Parse environment variables
+const envConfig = {
+  PORT: process.env.PORT,
+  NODE_ENV: process.env.NODE_ENV,
+  TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
+  FAL_API_KEY: process.env.FAL_API_KEY,
+  ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS?.split(',') || undefined,
+};
+
+// Validate and export config
+export const config = configSchema.parse(envConfig);
