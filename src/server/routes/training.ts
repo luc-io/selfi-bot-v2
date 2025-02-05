@@ -4,18 +4,17 @@ import { fal } from '@fal-ai/client';
 import JSZip from 'jszip';
 import { logger } from '../../lib/logger.js';
 import { Readable } from 'node:stream';
-import type { MultipartValue } from '@fastify/multipart';
+import { MultipartFile } from '@fastify/multipart';
 
-interface TrainingFormFields {
-  steps: MultipartValue<string>;
-  isStyle: MultipartValue<string>;
-  createMasks: MultipartValue<string>;
-  triggerWord: MultipartValue<string>;
-  captions: MultipartValue<string>;
-}
-
-interface TrainingFiles {
-  images: AsyncIterableIterator<MultipartValue<Readable>>;
+interface MultipartData {
+  fields: {
+    steps: string;
+    isStyle: string;
+    createMasks: string;
+    triggerWord: string;
+    captions: string;
+  };
+  files: MultipartFile[];
 }
 
 const training: FastifyPluginAsync = async (fastify) => {
@@ -27,61 +26,64 @@ const training: FastifyPluginAsync = async (fastify) => {
   });
 
   // Start training
-  fastify.post<{
-    Body: { [K in keyof TrainingFormFields]: TrainingFormFields[K]['value'] } & TrainingFiles;
-  }>('/training/start', async (request, reply) => {
+  fastify.post('/training/start', async (request, reply) => {
     try {
-      const parts = request.parts();
-
-      // Initialize ZIP
-      const zip = new JSZip();
-      
-      // Process form fields
-      const fields: Partial<TrainingFormFields> = {};
-      let captions: Record<string, string> = {};
+      const parts = await request.parts();
+      const data: MultipartData = {
+        fields: {
+          steps: '',
+          isStyle: 'false',
+          createMasks: 'true',
+          triggerWord: '',
+          captions: '{}'
+        },
+        files: []
+      };
 
       // Process all parts
       for await (const part of parts) {
-        if (part.type === 'file' && part.fieldname === 'images') {
-          // Handle image file
-          const buffer = await part.toBuffer();
-          zip.file(part.filename, buffer);
-        } else {
-          // Handle form fields
-          if (part.fieldname === 'captions') {
-            captions = JSON.parse(part.value as string);
-          } else {
-            fields[part.fieldname as keyof TrainingFormFields] = part;
-          }
+        if (part.type === 'file') {
+          data.files.push(part);
+        } else if (part.fieldname in data.fields) {
+          // This cast is safe because we check fieldname
+          const fieldName = part.fieldname as keyof typeof data.fields;
+          data.fields[fieldName] = part.value as string;
         }
       }
 
-      // Add caption files to ZIP
-      Object.entries(captions).forEach(([filename, caption]) => {
-        const captionFileName = filename.replace(/\.[^/.]+$/, '.txt');
-        zip.file(captionFileName, caption);
-      });
+      // Parse captions
+      const captions = JSON.parse(data.fields.captions);
 
-      // Validate required fields
-      if (!fields.steps?.value || !fields.triggerWord?.value) {
-        reply.code(400).send({ error: 'Missing required fields' });
-        return;
+      // Create ZIP file
+      const zip = new JSZip();
+      
+      // Add images and caption files to ZIP
+      for (const file of data.files) {
+        const buffer = await file.toBuffer();
+        zip.file(file.filename, buffer);
+
+        // Add caption file if exists
+        const caption = captions[file.filename];
+        if (caption) {
+          const captionFileName = file.filename.replace(/\.[^/.]+$/, '.txt');
+          zip.file(captionFileName, caption);
+        }
       }
 
       // Generate ZIP buffer
       const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+      const zipBlob = new Blob([zipBuffer], { type: 'application/zip' });
+      const zipFile = new File([zipBlob], 'training_images.zip', { type: 'application/zip' });
 
-      // Upload ZIP to fal storage using buffer
-      const blob = new Blob([zipBuffer], { type: 'application/zip' });
-      const zipFile = new File([blob], 'training_images.zip', { type: 'application/zip' });
+      // Upload ZIP to fal storage
       const imagesDataUrl = await fal.storage.upload(zipFile);
 
       // Start training
       const requestId = await startTraining({
-        steps: parseInt(fields.steps.value),
-        isStyle: fields.isStyle?.value === 'true',
-        createMasks: fields.createMasks?.value === 'true',
-        triggerWord: fields.triggerWord.value,
+        steps: parseInt(data.fields.steps),
+        isStyle: data.fields.isStyle === 'true',
+        createMasks: data.fields.createMasks === 'true',
+        triggerWord: data.fields.triggerWord,
         imagesDataUrl
       });
 
@@ -122,9 +124,7 @@ const training: FastifyPluginAsync = async (fastify) => {
     const { requestId } = request.params;
     
     try {
-      const result = await fal.queue.result('fal-ai/flux-lora-fast-training', {
-        requestId
-      });
+      const result = await fal.subscribe('fal-ai/flux-lora-fast-training', { requestId });
 
       if (!result?.data) {
         reply.code(404).send({ error: 'Training result not found' });
