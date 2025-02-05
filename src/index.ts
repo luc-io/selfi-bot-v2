@@ -15,7 +15,7 @@ async function setupWebhook(bot: Bot<BotContext>): Promise<boolean> {
     logger.info('Existing webhook deleted');
 
     // Try to set the webhook
-    const webhookUrl = 'https://selfi-dev.blackiris.art/bot';
+    const webhookUrl = `${config.PUBLIC_URL || 'https://selfi-dev.blackiris.art'}/bot`;
     const webhookResponse = await bot.api.setWebhook(webhookUrl, {
       drop_pending_updates: true,
       allowed_updates: ['message', 'callback_query', 'pre_checkout_query']
@@ -38,44 +38,57 @@ async function setupWebhook(bot: Bot<BotContext>): Promise<boolean> {
 }
 
 async function main() {
-  // Initialize bot
-  const bot = new Bot<BotContext>(config.TELEGRAM_BOT_TOKEN);
-  logger.info('Bot instance created');
+  try {
+    // Initialize bot
+    const bot = new Bot<BotContext>(config.TELEGRAM_BOT_TOKEN);
+    logger.info('Bot instance created');
 
-  // Add middleware
-  bot.api.config.use(autoRetry());
-  bot.api.config.use(parseMode('HTML'));
-  logger.info('Bot middleware configured');
+    // Add middleware
+    bot.api.config.use(autoRetry());
+    bot.api.config.use(parseMode('HTML'));
+    logger.info('Bot middleware configured');
 
-  // Register commands
-  bot.use(commands);
-  logger.info('Bot commands registered');
+    // Register commands
+    bot.use(commands);
+    logger.info('Bot commands registered');
 
-  // Setup server with webhook
-  const server = fastify();
-  setupServer(server, bot);
-  logger.info('Server routes configured');
+    // Setup server with webhook
+    const server = fastify();
+    setupServer(server, bot);
+    logger.info('Server routes configured');
 
-  // Start server
-  await server.listen({
-    port: parseInt(config.PORT, 10),
-    host: '0.0.0.0'
-  });
-  logger.info(`Server started on port ${config.PORT}`);
-
-  // Setup webhook
-  const webhookSuccess = await setupWebhook(bot);
-  if (!webhookSuccess) {
-    logger.warn('Failed to set webhook, bot might not receive updates');
-  }
-
-  // Error handling
-  bot.catch((err) => {
-    logger.error({
-      error: err,
-      msg: 'Bot error occurred'
+    // Start server
+    await server.listen({
+      port: parseInt(config.PORT, 10),
+      host: '0.0.0.0'
     });
-  });
+    logger.info(`Server started on port ${config.PORT}`);
+
+    // Setup webhook
+    const webhookSuccess = await setupWebhook(bot);
+    if (!webhookSuccess) {
+      logger.warn('Failed to set webhook, bot might not receive updates');
+    } else {
+      logger.info('Webhook setup successful');
+    }
+
+    // Error handling
+    bot.catch((err) => {
+      logger.error({
+        error: err,
+        msg: 'Bot error occurred'
+      });
+    });
+
+    // Log connection to database
+    const prisma = (await import('./lib/prisma.js')).prisma;
+    await prisma.$connect();
+    logger.info('Connected to database');
+
+  } catch (error) {
+    logger.error({ error }, 'Failed to start bot');
+    process.exit(1);
+  }
 }
 
 // Handle shutdown
@@ -85,6 +98,11 @@ process.on('SIGTERM', async () => {
     const bot = new Bot<BotContext>(config.TELEGRAM_BOT_TOKEN);
     await bot.api.deleteWebhook();
     logger.info('Webhook deleted');
+
+    const prisma = (await import('./lib/prisma.js')).prisma;
+    await prisma.$disconnect();
+    logger.info('Disconnected from database');
+
     process.exit(0);
   } catch (error) {
     logger.error('Error during shutdown:', error);
