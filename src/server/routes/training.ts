@@ -17,6 +17,17 @@ interface MultipartData {
   files: MultipartFile[];
 }
 
+interface FalTrainingResult {
+  data: {
+    diffusers_lora_file: {
+      url: string;
+    };
+    config_file: {
+      url: string;
+    };
+  };
+}
+
 const training: FastifyPluginAsync = async (fastify) => {
   // Register multipart support
   await fastify.register(import('@fastify/multipart'), {
@@ -124,7 +135,7 @@ const training: FastifyPluginAsync = async (fastify) => {
     const { requestId } = request.params;
     
     try {
-      const result = await fal.subscribe('fal-ai/flux-lora-fast-training', { requestId });
+      const result = await fal.subscribe('fal-ai/flux-lora-fast-training', { requestId }) as unknown as FalTrainingResult;
 
       if (!result?.data) {
         reply.code(404).send({ error: 'Training result not found' });
