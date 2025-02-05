@@ -11,7 +11,7 @@
     "format": "prettier --write src/**/*.ts"
   },
   "dependencies": {
-    "@fal-ai/client": "^0.8.2",
+    "@fal-ai/client": "^1.2.3",
     "@fastify/cors": "^9.0.0",
     "@fastify/multipart": "^8.0.0",
     "@grammyjs/auto-retry": "^1.1.1",
