@@ -5,6 +5,7 @@ import { logger } from '../lib/logger.js';
 import { BotContext } from '../types/bot.js';
 import { paramsRoutes } from './routes/params.js';
 import { loraRoutes } from './routes/loras.js';
+import { trainingRoutes } from './routes/training.js';
 
 export async function setupServer(server: FastifyInstance, bot: Bot<BotContext>) {
   if (!bot) {
@@ -29,6 +30,7 @@ export async function setupServer(server: FastifyInstance, bot: Bot<BotContext>)
   // Register API routes
   await server.register(paramsRoutes, { prefix: '/api' });
   await server.register(loraRoutes, { prefix: '/api' });
+  await server.register(trainingRoutes);
   logger.info('API routes configured');
 
   // Webhook endpoint
