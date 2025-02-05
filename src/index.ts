@@ -49,41 +49,46 @@ async function setupWebhook(bot: Bot<BotContext>): Promise<boolean> {
 
 async function main() {
   try {
-    // Initialize bot
-    const bot = new Bot<BotContext>(config.TELEGRAM_BOT_TOKEN);
-    
-    // Initialize bot info - This is required for webhook mode
-    await bot.init();
-    logger.info('Bot instance created and initialized');
+    // Initialize bot with error handling
+    let bot: Bot<BotContext>;
+    try {
+      bot = new Bot<BotContext>(config.TELEGRAM_BOT_TOKEN);
+      await bot.init();
+      logger.info('Bot instance created and initialized');
 
-    // Add middleware
-    bot.api.config.use(autoRetry());
-    bot.api.config.use(parseMode('HTML'));
-    logger.info('Bot middleware configured');
+      // Add middleware
+      bot.api.config.use(autoRetry());
+      bot.api.config.use(parseMode('HTML'));
+      logger.info('Bot middleware configured');
 
-    // Register commands
-    bot.use(commands);
-    logger.info('Bot commands registered');
-
-    // Setup server with webhook
-    const server = fastify({
-      logger: true
-    });
-
-    setupServer(server, bot);
-    logger.info('Server routes configured');
+      // Register commands
+      bot.use(commands);
+      logger.info('Bot commands registered');
+    } catch (error) {
+      logger.error({ error }, 'Failed to initialize bot');
+      throw error;
+    }
 
     // Connect to database first
     const prisma = (await import('./lib/prisma.js')).prisma;
     await prisma.$connect();
     logger.info('Connected to database');
 
+    // Setup server with webhook
+    const server = fastify({
+      logger: true
+    });
+
+    // Setup server routes with initialized bot
+    setupServer(server, bot);
+    logger.info('Server routes configured');
+
     // Start server
     await server.listen({ 
       port: parseInt(config.PORT, 10), 
       host: '0.0.0.0',
     });
-    logger.info(`Server started on ${server.server.address()}`);
+    logger.info(`Server started on http://0.0.0.0:${config.PORT}`);
 
     // Setup webhook after server is running
     const webhookSuccess = await setupWebhook(bot);
@@ -93,7 +98,7 @@ async function main() {
       logger.info('Webhook setup successful');
     }
 
-    // Error handling
+    // Error handling for bot
     bot.catch((err) => {
       logger.error({
         error: err,
