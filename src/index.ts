@@ -51,7 +51,10 @@ async function main() {
   try {
     // Initialize bot
     const bot = new Bot<BotContext>(config.TELEGRAM_BOT_TOKEN);
-    logger.info('Bot instance created');
+    
+    // Initialize bot info - This is required for webhook mode
+    await bot.init();
+    logger.info('Bot instance created and initialized');
 
     // Add middleware
     bot.api.config.use(autoRetry());
@@ -76,16 +79,11 @@ async function main() {
     logger.info('Connected to database');
 
     // Start server
-    server.listen({ 
+    await server.listen({ 
       port: parseInt(config.PORT, 10), 
       host: '0.0.0.0',
-    }, (err: Error | null, address: string) => {
-      if (err) {
-        logger.error({ error: err }, 'Failed to start server');
-        process.exit(1);
-      }
-      logger.info(`Server started on ${address}`);
     });
+    logger.info(`Server started on ${server.server.address()}`);
 
     // Setup webhook after server is running
     const webhookSuccess = await setupWebhook(bot);
