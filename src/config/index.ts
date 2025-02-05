@@ -1,18 +1,12 @@
-import dotenv from 'dotenv';
-import type { Config } from '../types/config.js';
-
-// Load environment variables
-dotenv.config();
-
-export const config: Config = {
-  /**
-   * App configuration
-   */
+/**
+ * App configuration
+ */
+export const config = {
   PORT: process.env.PORT || 3001,
   NODE_ENV: (process.env.NODE_ENV || 'development') as 'development' | 'production',
-  PUBLIC_URL: process.env.PUBLIC_URL,
   MINIAPP_URL: process.env.MINIAPP_URL,
-  
+  PUBLIC_URL: process.env.PUBLIC_URL || 'https://selfi-dev.blackiris.art',
+
   /**
    * Telegram bot configuration
    */
@@ -41,20 +35,20 @@ export const config: Config = {
   /**
    * Cost configuration
    */
-  IMAGE_COST: parseInt(process.env.IMAGE_COST || '1', 10),
-  TRAINING_BASE_COST: parseInt(process.env.TRAINING_BASE_COST || '100', 10),
+  IMAGE_COST: 1,
+  TRAINING_BASE_COST: 100,
 
   /**
    * Training configuration
    */
-  DEFAULT_TRAINING_STEPS: parseInt(process.env.DEFAULT_TRAINING_STEPS || '600', 10),
-  MIN_TRAINING_STEPS: parseInt(process.env.MIN_TRAINING_STEPS || '100', 10),
-  MAX_TRAINING_STEPS: parseInt(process.env.MAX_TRAINING_STEPS || '1200', 10),
-  DEFAULT_LEARNING_RATE: parseFloat(process.env.DEFAULT_LEARNING_RATE || '0.0001'),
+  DEFAULT_TRAINING_STEPS: 600,
+  MIN_TRAINING_STEPS: 100,
+  MAX_TRAINING_STEPS: 1200,
+  DEFAULT_LEARNING_RATE: 0.0001,
 
   /**
    * Image generation configuration
    */
-  DEFAULT_BASE_MODEL: process.env.DEFAULT_BASE_MODEL || 'fal-ai/flux-lora',
-  DEFAULT_NEGATIVE_PROMPT: process.env.DEFAULT_NEGATIVE_PROMPT || '',
-};
+  DEFAULT_BASE_MODEL: 'fal-ai/flux-lora',
+  DEFAULT_NEGATIVE_PROMPT: '',
+} as const;
