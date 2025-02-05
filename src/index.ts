@@ -1,4 +1,4 @@
-import { Bot, BotConfig } from 'grammy';
+import { Bot } from 'grammy';
 import { BotContext } from './types/bot.js';
 import { config } from './config.js';
 import { fastify } from 'fastify';
@@ -13,6 +13,16 @@ async function setupWebhook(bot: Bot<BotContext>): Promise<boolean> {
     // First, delete any existing webhook
     await bot.api.deleteWebhook();
     logger.info('Existing webhook deleted');
+
+    // Register bot commands
+    await bot.api.setMyCommands([
+      { command: 'start', description: 'Start the bot' },
+      { command: 'gen', description: 'Generate a new image with AI' },
+      { command: 'stars', description: 'Buy stars (currency for generations)' },
+      { command: 'balance', description: 'Check your stars balance' },
+      { command: 'help', description: 'Show all available commands' }
+    ]);
+    logger.info('Bot commands registered with Telegram');
 
     // Try to set the webhook
     const webhookUrl = `${config.PUBLIC_URL || 'https://selfi-dev.blackiris.art'}/bot`;
