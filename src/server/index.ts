@@ -3,7 +3,8 @@ import { Update } from '@grammyjs/types';
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { logger } from '../lib/logger.js';
 import { BotContext } from '../types/bot.js';
-import { setupApiRoutes } from './api/index.js';
+import { paramsRoutes } from './routes/params.js';
+import { loraRoutes } from './routes/loras.js';
 
 export async function setupServer(server: FastifyInstance, bot: Bot<BotContext>) {
   if (!bot) {
@@ -14,10 +15,10 @@ export async function setupServer(server: FastifyInstance, bot: Bot<BotContext>)
   await server.register(import('@fastify/cors'), {
     origin: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type']
+    allowedHeaders: ['Content-Type', 'x-telegram-init-data', 'x-telegram-user-id']
   });
 
-  // Add request hook to validate bot is initialized
+  // Add request hook to validate bot is initialized for webhook endpoints
   server.addHook('preHandler', async (request, reply) => {
     if (request.url.startsWith('/bot') && !bot.isInited()) {
       logger.error('Bot not initialized when handling request');
@@ -26,7 +27,8 @@ export async function setupServer(server: FastifyInstance, bot: Bot<BotContext>)
   });
 
   // Register API routes
-  await setupApiRoutes(server);
+  await server.register(paramsRoutes, { prefix: '/api' });
+  await server.register(loraRoutes, { prefix: '/api' });
   logger.info('API routes configured');
 
   // Webhook endpoint
