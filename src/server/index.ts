@@ -7,11 +7,25 @@ import { paramsRoutes } from './routes/params.js';
 import { loraRoutes } from './routes/loras.js';
 import { trainingRoutes } from './routes/training.js';
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 
 export async function setupServer(server: FastifyInstance, bot: Bot<BotContext>) {
   if (!bot) {
     throw new Error('Bot instance must be provided to setupServer');
   }
+
+  // Enable multipart for file uploads
+  await server.register(multipart, {
+    limits: {
+      fieldNameSize: 100, // Max field name size in bytes
+      fieldSize: 1000000, // Max field value size in bytes (1MB)
+      fields: 10, // Max number of non-file fields
+      fileSize: 100000000, // Max file size in bytes (100MB)
+      files: 10, // Max number of file fields
+      headerPairs: 2000 // Max number of header key=>value pairs
+    },
+    attachFieldsToBody: true
+  });
 
   // Enable CORS for the miniapp
   await server.register(cors, {
@@ -27,6 +41,9 @@ export async function setupServer(server: FastifyInstance, bot: Bot<BotContext>)
       throw new Error('Bot not initialized');
     }
   });
+
+  // Configure body size limits
+  server.setBodyLimit(100 * 1024 * 1024); // 100MB
 
   // Register API routes
   await server.register(paramsRoutes, { prefix: '/api' });
