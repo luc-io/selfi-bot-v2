@@ -2,30 +2,19 @@ import { FastifyInstance } from 'fastify';
 import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
 import { LoraStatus } from '@prisma/client';
-import multipartParser from '@fastify/multipart';
 
 interface TrainingStartRequest {
-  name: string;
-  instancePrompt: string;
-  classPrompt?: string;
-  steps?: number;
-  learningRate?: number;
-  images?: File[];
+  steps: number;
+  is_style: boolean;
+  create_masks: boolean;
+  trigger_word: string;
+  images_data_url: string;
 }
 
 // Default values when not provided in the request
 const DEFAULT_TRAINING_STEPS = 600;
-const DEFAULT_LEARNING_RATE = 0.0001;
 
 export async function trainingRoutes(app: FastifyInstance) {
-  // Register multipart support for this route
-  app.register(multipartParser, {
-    limits: {
-      files: 20, // Max number of files
-      fileSize: 50 * 1024 * 1024 // 50MB per file
-    }
-  });
-
   // Start training
   app.post('/training/start', {
     schema: {
@@ -35,39 +24,34 @@ export async function trainingRoutes(app: FastifyInstance) {
         properties: {
           'x-telegram-user-id': { type: 'string' }
         }
+      },
+      body: {
+        type: 'object',
+        required: ['steps', 'trigger_word', 'images_data_url'],
+        properties: {
+          steps: { type: 'number' },
+          is_style: { type: 'boolean' },
+          create_masks: { type: 'boolean' },
+          trigger_word: { type: 'string' },
+          images_data_url: { type: 'string' }
+        }
       }
     }
   }, async (request, reply) => {
     try {
       const telegramId = request.headers['x-telegram-user-id'] as string;
+      const params = request.body as TrainingStartRequest;
 
       if (!telegramId) {
         return reply.status(400).send({ error: 'Missing user ID' });
       }
 
-      // Handle multipart data
-      const data = await request.file();
-      if (!data) {
-        return reply.status(400).send({ error: 'Missing form data' });
-      }
-
-      // Parse form data
-      const { name, instancePrompt, classPrompt, steps, learningRate } = data.fields;
-
-      // Parse parameters
-      const params = {
-        name: (name as any)?.value,
-        instancePrompt: (instancePrompt as any)?.value,
-        classPrompt: (classPrompt as any)?.value,
-        steps: Number((steps as any)?.value) || DEFAULT_TRAINING_STEPS,
-        learningRate: Number((learningRate as any)?.value) || DEFAULT_LEARNING_RATE
-      };
-
-      logger.info({ params }, 'Received training request');
-
-      if (!params.name || !params.instancePrompt) {
-        return reply.status(400).send({ error: 'Missing required fields' });
-      }
+      logger.info({ 
+        telegramId,
+        triggerWord: params.trigger_word,
+        steps: params.steps,
+        isStyle: params.is_style
+      }, 'Received training request');
 
       // Get user
       const user = await prisma.user.findUnique({
@@ -90,8 +74,8 @@ export async function trainingRoutes(app: FastifyInstance) {
       // Create LoRA model
       const lora = await prisma.loraModel.create({
         data: {
-          name: params.name,
-          triggerWord: params.name.toLowerCase().replace(/[^\w\s]/g, ''),
+          name: params.trigger_word,
+          triggerWord: params.trigger_word,
           baseModelId: baseModel.databaseId,
           userDatabaseId: user.databaseId,
           status: LoraStatus.PENDING
@@ -107,12 +91,17 @@ export async function trainingRoutes(app: FastifyInstance) {
           loraId: lora.databaseId,
           baseModelId: baseModel.databaseId,
           userDatabaseId: user.databaseId,
-          instancePrompt: params.instancePrompt,
-          classPrompt: params.classPrompt,
+          instancePrompt: `photo of ${params.trigger_word}`,
+          classPrompt: params.is_style ? undefined : 'photo of person',
           steps: params.steps,
-          learningRate: params.learningRate,
+          learningRate: 0.0001, // Default learning rate
           starsSpent: 100, // TODO: Make configurable
-          imageUrls: [], // Will be populated during training
+          imageUrls: [], // Will be populated with the zip URL
+          metadata: {
+            zipUrl: params.images_data_url,
+            isStyle: params.is_style,
+            createMasks: params.create_masks
+          }
         }
       });
 
