@@ -68,20 +68,5 @@ export async function setupServer(server: FastifyInstance, bot: Bot<BotContext>)
     });
   });
 
-  // Add error handler for unhandled errors
-  server.setErrorHandler((error, request, reply) => {
-    logger.error({
-      error,
-      stack: error.stack,
-      url: request.url,
-      method: request.method,
-      botInitialized: bot?.isInited()
-    }, 'Unhandled server error');
-
-    reply.status(500).send({
-      error: error.message || 'Internal Server Error'
-    });
-  });
-
   return server;
 }
