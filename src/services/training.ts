@@ -54,6 +54,10 @@ export interface TrainModelResult {
   config: FalTrainingJsonResult;
 }
 
+if (!process.env.FAL_KEY) {
+  throw new Error('FAL_KEY environment variable is not set');
+}
+
 export class TrainingService {
   constructor() {
     // Configure FAL client with environment variables
