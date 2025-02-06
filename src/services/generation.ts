@@ -1,8 +1,19 @@
-import type { FalImage, FalResponse } from '@fal-ai/client';
-import { fal } from '@fal-ai/client';
 import type { GenerateImageParams, GenerationResponse } from '../types/generation';
 import { logger } from '../lib/logger.js';
 import { prisma } from '../lib/prisma.js';
+
+interface FalImage {
+  url: string;
+  width: number;
+  height: number;
+  content_type: string;
+}
+
+interface FalResponse {
+  images: FalImage | FalImage[];
+  seed: number;
+  has_nsfw_concepts: boolean[];
+}
 
 interface FalRequestParams {
   input: {
@@ -67,7 +78,20 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
 
   logger.info({ requestParams }, 'Sending request to FAL');
 
-  const result = await fal.run('fal-ai/flux-lora', requestParams);
+  const falResult = await fetch('https://queue.fal.run/fal-ai/flux-lora/subscribe', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Key ${process.env.FAL_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestParams),
+  });
+
+  if (!falResult.ok) {
+    throw new Error(`Generation failed with status ${falResult.status}`);
+  }
+
+  const result = await falResult.json() as { data: FalResponse };
   logger.info({ result }, 'Received FAL response');
 
   const images = Array.isArray(result.data.images) ? result.data.images : [result.data.images];
@@ -82,6 +106,5 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
   };
 
   logger.info({ generationResponse }, 'Generation completed successfully');
-
   return generationResponse;
 }
