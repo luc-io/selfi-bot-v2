@@ -112,7 +112,10 @@ export async function trainingRoutes(app: FastifyInstance) {
           data: { 
             status: TrainStatus.COMPLETED,
             completedAt: new Date(),
-            metadata: result
+            metadata: {
+              ...result,
+              status: 'COMPLETED'
+            }
           }
         })
       ]);
