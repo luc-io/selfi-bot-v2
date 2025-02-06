@@ -19,6 +19,11 @@ interface FalRequestParams {
   logs?: boolean;
 }
 
+// Configure Fal client with environment variables
+fal.config({
+  credentials: `${process.env.FAL_KEY}:${process.env.FAL_SECRET}`
+});
+
 export async function generateImage(params: GenerateImageParams): Promise<GenerationResponse> {
   logger.info({ params }, 'Starting image generation with params');
   
