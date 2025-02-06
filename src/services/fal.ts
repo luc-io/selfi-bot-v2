@@ -32,6 +32,15 @@ interface FalTrainingJsonResult {
   contentType: string;
 }
 
+interface FalTrainingResult {
+  data: {
+    diffusers_lora_file: FalFile;
+    config_file: FalFile;
+    debug_preprocessed_output?: FalFile | null;
+  };
+  requestId: string;
+}
+
 interface QueueUpdate {
   status: string;
   logs: Array<{ message: string }>;
@@ -117,7 +126,7 @@ export class FalService {
             );
           }
         },
-      });
+      }) as FalTrainingResult;
 
       if (!result.data?.diffusers_lora_file || !result.data?.config_file) {
         throw new Error('No data returned from training');
