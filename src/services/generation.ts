@@ -19,6 +19,10 @@ interface FalRequestParams {
   logs?: boolean;
 }
 
+if (!process.env.FAL_KEY) {
+  throw new Error('FAL_KEY environment variable is not set');
+}
+
 // Configure Fal client with environment variables
 fal.config({
   credentials: process.env.FAL_KEY
