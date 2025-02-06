@@ -25,10 +25,12 @@ interface FalFile {
   content_type: string;
 }
 
-interface FalTrainingResponse {
-  diffusers_lora_file: FalFile;
-  config_file: FalFile;
-  debug_preprocessed_output?: FalFile | null;
+interface FalTrainingResult {
+  data: {
+    diffusers_lora_file: FalFile;
+    config_file: FalFile;
+    debug_preprocessed_output?: FalFile | null;
+  }
 }
 
 interface QueueUpdate {
@@ -87,11 +89,11 @@ export class FalService {
     steps: number;
     is_style: boolean;
     create_masks: boolean;
-  }): Promise<FalTrainingResponse> {
+  }): Promise<FalFile[]> {
     try {
       logger.info({ params }, 'Starting model training');
       
-      const result = await fal.subscribe<FalTrainingResponse>("fal-ai/flux-lora-fast-training", {
+      const result = await fal.subscribe("fal-ai/flux-lora-fast-training", {
         input: {
           images_data_url: params.images_data_url,
           create_masks: params.create_masks,
@@ -107,7 +109,7 @@ export class FalService {
             );
           }
         },
-      });
+      }) as FalTrainingResult;
 
       if (!result.data) {
         throw new Error('No data returned from training');
@@ -118,7 +120,7 @@ export class FalService {
         configUrl: result.data.config_file.url 
       }, 'Training completed');
 
-      return result.data;
+      return [result.data.diffusers_lora_file, result.data.config_file];
     } catch (error) {
       logger.error({ error }, 'Model training failed');
       throw error;
