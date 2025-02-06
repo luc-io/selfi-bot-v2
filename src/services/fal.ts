@@ -1,14 +1,16 @@
 import { fal } from "@fal-ai/client";
 import { logger } from '../logger';
 
+interface FalImage {
+  url: string;
+  width: number;
+  height: number;
+  content_type: string;
+}
+
 interface FalGenerationResponse {
   seed: number;
-  images: Array<{
-    url: string;
-    width: number;
-    height: number;
-    content_type: string;
-  }>;
+  images: Array<FalImage>;
   prompt: string;
   timings: {
     inference: number;
@@ -16,25 +18,22 @@ interface FalGenerationResponse {
   has_nsfw_concepts: boolean[];
 }
 
+interface FalFile {
+  url: string;
+  file_name: string;
+  file_size: number;
+  content_type: string;
+}
+
 interface FalTrainingResponse {
-  diffusers_lora_file: {
-    url: string;
-    file_name: string;
-    file_size: number;
-    content_type: string;
-  };
-  config_file: {
-    url: string;
-    file_name: string;
-    file_size: number;
-    content_type: string;
-  };
-  debug_preprocessed_output?: {
-    url: string;
-    file_name: string;
-    file_size: number;
-    content_type: string;
-  } | null;
+  diffusers_lora_file: FalFile;
+  config_file: FalFile;
+  debug_preprocessed_output?: FalFile | null;
+}
+
+interface QueueUpdate {
+  status: string;
+  logs: Array<{ message: string }>;
 }
 
 export class FalService {
@@ -92,7 +91,7 @@ export class FalService {
     try {
       logger.info({ params }, 'Starting model training');
       
-      const result = await fal.subscribe("fal-ai/flux-lora-fast-training", {
+      const result = await fal.subscribe<FalTrainingResponse>("fal-ai/flux-lora-fast-training", {
         input: {
           images_data_url: params.images_data_url,
           create_masks: params.create_masks,
@@ -101,9 +100,11 @@ export class FalService {
           trigger_word: params.trigger_word,
         },
         logs: true,
-        onQueueUpdate: (update) => {
+        onQueueUpdate: (update: QueueUpdate) => {
           if (update.status === "IN_PROGRESS") {
-            update.logs.map((log) => log.message).forEach(msg => logger.info({ msg }, 'Training progress'));
+            update.logs.map((log) => log.message).forEach((msg: string) => 
+              logger.info({ msg }, 'Training progress')
+            );
           }
         },
       });
