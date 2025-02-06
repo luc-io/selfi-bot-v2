@@ -138,7 +138,7 @@ export class FalService {
             );
           }
         },
-      }) as FalTrainingResult;
+      }) as unknown as FalTrainingResult;
 
       if (!result.data?.diffusers_lora_file || !result.data?.config_file) {
         throw new Error('No data returned from training');
