@@ -1,21 +1,51 @@
 import { fal } from "@fal-ai/client";
 import { logger } from '../logger.js';
 
+type ImageSize = 
+  | "square_hd" 
+  | "square" 
+  | "portrait_4_3" 
+  | "portrait_16_9" 
+  | "landscape_4_3" 
+  | "landscape_16_9" 
+  | { width: number; height: number };
+
 interface FalImage {
   url: string;
-  width: number;
-  height: number;
+  width?: number;
+  height?: number;
   content_type: string;
 }
 
+interface FalGenerationTimings {
+  inference: number;
+}
+
 interface FalGenerationResponse {
-  seed: number;
   images: Array<FalImage>;
-  prompt: string;
-  timings: {
-    inference: number;
-  };
+  timings: FalGenerationTimings;
+  seed: number;
   has_nsfw_concepts: boolean[];
+  prompt: string;
+}
+
+interface LoraWeight {
+  path: string;
+  scale?: number;
+}
+
+interface GenerationInput {
+  prompt: string;
+  negative_prompt?: string;
+  image_size?: ImageSize;
+  num_inference_steps?: number;
+  seed?: number;
+  loras?: LoraWeight[];
+  guidance_scale?: number;
+  sync_mode?: boolean;
+  num_images?: number;
+  enable_safety_checker?: boolean;
+  output_format?: "jpeg" | "png";
 }
 
 interface FalFile {
@@ -80,10 +110,10 @@ export class FalService {
           image_size: 'landscape_4_3',
           guidance_scale: 3.5,
           num_inference_steps: 28,
-          num_images: 1
-        },
+          num_images: 1,
+        } as GenerationInput,
         logs: true,
-      }) as { data: FalGenerationResponse };
+      }) as unknown as { data: FalGenerationResponse };
 
       return result.data.images[0].url;
     } catch (error) {
