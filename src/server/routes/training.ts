@@ -12,10 +12,7 @@ interface TrainingStartRequest {
   images_data_url: string;
 }
 
-const trainingService = new TrainingService(
-  process.env.FAL_KEY ?? '',
-  process.env.FAL_SECRET ?? ''
-);
+const trainingService = new TrainingService();
 
 export async function trainingRoutes(app: FastifyInstance) {
   // Start training
