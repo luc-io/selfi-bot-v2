@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
 import { LoraStatus, TrainStatus } from '@prisma/client';
-import { FalService } from '../../services/fal.js';
+import { TrainingService } from '../../services/training.js';
 
 interface TrainingStartRequest {
   steps: number;
@@ -12,7 +12,7 @@ interface TrainingStartRequest {
   images_data_url: string;
 }
 
-const falService = new FalService(
+const trainingService = new TrainingService(
   process.env.FAL_KEY ?? '',
   process.env.FAL_SECRET ?? ''
 );
@@ -89,7 +89,7 @@ export async function trainingRoutes(app: FastifyInstance) {
       // Start FAL training
       logger.info({ loraId: lora.databaseId }, 'Starting FAL training');
       
-      const result = await falService.trainModel({
+      const result = await trainingService.trainModel({
         images_data_url: params.images_data_url,
         trigger_word: params.trigger_word,
         steps: params.steps,
