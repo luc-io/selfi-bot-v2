@@ -1,7 +1,8 @@
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
-import { LoraStatus } from '@prisma/client';
+import { LoraStatus, TrainStatus } from '@prisma/client';
+import { FalService } from '../../services/fal.js';
 
 interface TrainingStartRequest {
   steps: number;
@@ -11,8 +12,10 @@ interface TrainingStartRequest {
   images_data_url: string;
 }
 
-// Default values when not provided in the request
-const DEFAULT_TRAINING_STEPS = 600;
+const falService = new FalService(
+  process.env.FAL_KEY ?? '',
+  process.env.FAL_SECRET ?? ''
+);
 
 export async function trainingRoutes(app: FastifyInstance) {
   // Start training
@@ -46,13 +49,6 @@ export async function trainingRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: 'Missing user ID' });
       }
 
-      logger.info({ 
-        telegramId,
-        triggerWord: params.trigger_word,
-        steps: params.steps,
-        isStyle: params.is_style
-      }, 'Received training request');
-
       // Get user
       const user = await prisma.user.findUnique({
         where: { telegramId }
@@ -62,60 +58,76 @@ export async function trainingRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: 'User not found' });
       }
 
-      // Find base model
-      const baseModel = await prisma.baseModel.findFirst({
-        where: { modelPath: 'fal-ai/flux-lora' }
-      });
-
-      if (!baseModel) {
-        return reply.status(500).send({ error: 'Base model not found' });
-      }
-
-      // Create LoRA model
-      const lora = await prisma.loraModel.create({
-        data: {
-          name: params.trigger_word,
-          triggerWord: params.trigger_word,
-          baseModelId: baseModel.databaseId,
-          userDatabaseId: user.databaseId,
-          status: LoraStatus.PENDING
-        },
-        include: {
-          training: true
-        }
-      });
-
-      // Create training record
-      const training = await prisma.training.create({
-        data: {
-          loraId: lora.databaseId,
-          baseModelId: baseModel.databaseId,
-          userDatabaseId: user.databaseId,
-          instancePrompt: `photo of ${params.trigger_word}`,
-          classPrompt: params.is_style ? undefined : 'photo of person',
-          steps: params.steps,
-          learningRate: 0.0001, // Default learning rate
-          starsSpent: 100, // TODO: Make configurable
-          imageUrls: [], // Will be populated with the zip URL
-          metadata: {
-            zipUrl: params.images_data_url,
-            isStyle: params.is_style,
-            createMasks: params.create_masks
+      // Create LoRA model and training records
+      const [lora, training] = await prisma.$transaction(async (tx) => {
+        const lora = await tx.loraModel.create({
+          data: {
+            name: params.trigger_word,
+            triggerWord: params.trigger_word,
+            status: LoraStatus.TRAINING,
+            baseModel: { connect: { modelPath: 'fal-ai/flux-lora-fast-training' } },
+            user: { connect: { telegramId } }
           }
-        }
+        });
+
+        const training = await tx.training.create({
+          data: {
+            lora: { connect: { databaseId: lora.databaseId } },
+            user: { connect: { telegramId } },
+            baseModel: { connect: { modelPath: 'fal-ai/flux-lora-fast-training' } },
+            imageUrls: [params.images_data_url],
+            instancePrompt: params.trigger_word,
+            steps: params.steps,
+            starsSpent: 10,
+            status: TrainStatus.PROCESSING
+          }
+        });
+
+        return [lora, training];
       });
+
+      // Start FAL training
+      logger.info({ loraId: lora.databaseId }, 'Starting FAL training');
+      
+      const result = await falService.trainModel({
+        images_data_url: params.images_data_url,
+        trigger_word: params.trigger_word,
+        steps: params.steps,
+        is_style: params.is_style,
+        create_masks: params.create_masks
+      });
+
+      // Update records with results
+      await prisma.$transaction([
+        prisma.loraModel.update({
+          where: { databaseId: lora.databaseId },
+          data: {
+            weightsUrl: result.diffusers_lora_file.url,
+            configUrl: result.config_file.url,
+            status: LoraStatus.COMPLETED
+          }
+        }),
+        prisma.training.update({
+          where: { loraId: lora.databaseId },
+          data: { 
+            status: TrainStatus.COMPLETED,
+            completedAt: new Date(),
+            metadata: result
+          }
+        })
+      ]);
 
       logger.info({
         loraId: lora.databaseId,
         trainingId: training.databaseId,
-        userId: user.databaseId,
-        params
-      }, 'Training started');
+        weightsUrl: result.diffusers_lora_file.url
+      }, 'Training completed successfully');
 
       return reply.send({
         id: lora.databaseId,
         trainingId: training.databaseId
       });
+
     } catch (error) {
       logger.error({ error }, 'Failed to start training');
       reply.status(500).send({ error: 'Failed to start training' });
