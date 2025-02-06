@@ -19,13 +19,14 @@ interface FalRequestParams {
   logs?: boolean;
 }
 
-if (!process.env.FAL_KEY) {
+const falKey = process.env.FAL_KEY;
+if (!falKey) {
   throw new Error('FAL_KEY environment variable is not set');
 }
 
 // Configure Fal client with environment variables
 fal.config({
-  credentials: process.env.FAL_KEY
+  credentials: falKey
 });
 
 export async function generateImage(params: GenerateImageParams): Promise<GenerationResponse> {
