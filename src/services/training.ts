@@ -59,11 +59,14 @@ if (!falKey) {
   throw new Error('FAL_KEY environment variable is not set');
 }
 
+// Now TypeScript knows falKey is string
+const credentials: string = falKey;
+
 export class TrainingService {
   constructor() {
     // Configure FAL client with environment variables
     fal.config({
-      credentials: falKey
+      credentials
     });
   }
 
