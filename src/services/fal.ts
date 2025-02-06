@@ -20,9 +20,9 @@ interface FalGenerationResponse {
 
 interface FalFile {
   url: string;
+  content_type: string;
   file_name: string;
   file_size: number;
-  content_type: string;
 }
 
 interface FalTrainingJsonResult {
@@ -32,12 +32,24 @@ interface FalTrainingJsonResult {
   contentType: string;
 }
 
+interface FalTrainingInput {
+  images_data_url: string;
+  trigger_word?: string;
+  create_masks?: boolean;
+  steps: number;
+  is_style?: boolean;
+  is_input_format_already_preprocessed?: boolean;
+  data_archive_format?: string;
+}
+
+interface FalTrainingResponse {
+  diffusers_lora_file: FalFile;
+  config_file: FalFile;
+  debug_preprocessed_output?: FalFile;
+}
+
 interface FalTrainingResult {
-  data: {
-    diffusers_lora_file: FalFile;
-    config_file: FalFile;
-    debug_preprocessed_output?: FalFile | null;
-  };
+  data: FalTrainingResponse;
   requestId: string;
 }
 
@@ -113,11 +125,11 @@ export class FalService {
       const result = await fal.subscribe("fal-ai/flux-lora-fast-training", {
         input: {
           images_data_url: params.images_data_url,
+          trigger_word: params.trigger_word,
           create_masks: params.create_masks,
           steps: params.steps,
           is_style: params.is_style,
-          trigger_word: params.trigger_word,
-        },
+        } as FalTrainingInput,
         logs: true,
         onQueueUpdate: (update: QueueUpdate) => {
           if (update.status === "IN_PROGRESS") {
