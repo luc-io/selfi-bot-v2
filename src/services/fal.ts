@@ -25,12 +25,11 @@ interface FalFile {
   content_type: string;
 }
 
-interface FalTrainingResult {
-  data: {
-    diffusers_lora_file: FalFile;
-    config_file: FalFile;
-    debug_preprocessed_output?: FalFile | null;
-  }
+interface FalTrainingJsonResult {
+  url: string;
+  fileName: string;
+  fileSize: number;
+  contentType: string;
 }
 
 interface QueueUpdate {
@@ -83,13 +82,22 @@ export class FalService {
     }
   }
 
+  private convertFileToJson(file: FalFile): FalTrainingJsonResult {
+    return {
+      url: file.url,
+      fileName: file.file_name,
+      fileSize: file.file_size,
+      contentType: file.content_type
+    };
+  }
+
   public async trainModel(params: {
     images_data_url: string;
     trigger_word: string;
     steps: number;
     is_style: boolean;
     create_masks: boolean;
-  }): Promise<FalFile[]> {
+  }): Promise<{ weights: FalTrainingJsonResult; config: FalTrainingJsonResult }> {
     try {
       logger.info({ params }, 'Starting model training');
       
@@ -109,18 +117,23 @@ export class FalService {
             );
           }
         },
-      }) as FalTrainingResult;
+      });
 
-      if (!result.data) {
+      if (!result.data?.diffusers_lora_file || !result.data?.config_file) {
         throw new Error('No data returned from training');
       }
 
+      const response = {
+        weights: this.convertFileToJson(result.data.diffusers_lora_file),
+        config: this.convertFileToJson(result.data.config_file)
+      };
+
       logger.info({ 
-        weightsUrl: result.data.diffusers_lora_file.url,
-        configUrl: result.data.config_file.url 
+        weightsUrl: response.weights.url,
+        configUrl: response.config.url 
       }, 'Training completed');
 
-      return [result.data.diffusers_lora_file, result.data.config_file];
+      return response;
     } catch (error) {
       logger.error({ error }, 'Model training failed');
       throw error;
