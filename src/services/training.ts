@@ -55,9 +55,10 @@ export interface TrainModelResult {
 }
 
 export class TrainingService {
-  constructor(private readonly apiKey: string, private readonly apiSecret: string) {
+  constructor() {
+    // Configure FAL client with environment variables
     fal.config({
-      credentials: `${this.apiKey}:${this.apiSecret}`
+      credentials: process.env.FAL_KEY
     });
   }
 
