@@ -1,5 +1,5 @@
 import { fal } from "@fal-ai/client";
-import { logger } from '../logger';
+import { logger } from '../logger.js';
 
 interface FalImage {
   url: string;
