@@ -89,7 +89,7 @@ export async function trainingRoutes(app: FastifyInstance) {
       // Start FAL training
       logger.info({ loraId: lora.databaseId }, 'Starting FAL training');
       
-      const [weights, config] = await falService.trainModel({
+      const result = await falService.trainModel({
         images_data_url: params.images_data_url,
         trigger_word: params.trigger_word,
         steps: params.steps,
@@ -102,8 +102,8 @@ export async function trainingRoutes(app: FastifyInstance) {
         prisma.loraModel.update({
           where: { databaseId: lora.databaseId },
           data: {
-            weightsUrl: weights.url,
-            configUrl: config.url,
+            weightsUrl: result.weights.url,
+            configUrl: result.config.url,
             status: LoraStatus.COMPLETED
           }
         }),
@@ -112,10 +112,7 @@ export async function trainingRoutes(app: FastifyInstance) {
           data: { 
             status: TrainStatus.COMPLETED,
             completedAt: new Date(),
-            metadata: {
-              weights,
-              config
-            }
+            metadata: JSON.stringify(result)
           }
         })
       ]);
@@ -123,7 +120,7 @@ export async function trainingRoutes(app: FastifyInstance) {
       logger.info({
         loraId: lora.databaseId,
         trainingId: training.databaseId,
-        weightsUrl: weights.url
+        weightsUrl: result.weights.url
       }, 'Training completed successfully');
 
       return reply.send({
