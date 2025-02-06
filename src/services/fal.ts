@@ -1,51 +1,19 @@
 import { fal } from "@fal-ai/client";
 import { logger } from '../logger.js';
 
-type ImageSize = 
-  | "square_hd" 
-  | "square" 
-  | "portrait_4_3" 
-  | "portrait_16_9" 
-  | "landscape_4_3" 
-  | "landscape_16_9" 
-  | { width: number; height: number };
-
-interface FalImage {
-  url: string;
-  width?: number;
-  height?: number;
-  content_type: string;
-}
-
-interface FalGenerationTimings {
-  inference: number;
-}
-
 interface FalGenerationResponse {
-  images: Array<FalImage>;
-  timings: FalGenerationTimings;
   seed: number;
+  images: Array<{
+    url: string;
+    width: number;
+    height: number;
+    content_type: string;
+  }>;
+  prompt: string;
+  timings: {
+    inference: number;
+  };
   has_nsfw_concepts: boolean[];
-  prompt: string;
-}
-
-interface LoraWeight {
-  path: string;
-  scale?: number;
-}
-
-interface GenerationInput {
-  prompt: string;
-  negative_prompt?: string;
-  image_size?: ImageSize;
-  num_inference_steps?: number;
-  seed?: number;
-  loras?: LoraWeight[];
-  guidance_scale?: number;
-  sync_mode?: boolean;
-  num_images?: number;
-  enable_safety_checker?: boolean;
-  output_format?: "jpeg" | "png";
 }
 
 interface FalFile {
@@ -95,7 +63,7 @@ export class FalService {
   constructor(apiKey: string, apiSecret: string) {
     this.apiKey = apiKey;
     this.apiSecret = apiSecret;
-    // Configure FAL client
+    // Configure FAL client for training
     fal.config({
       credentials: `${this.apiKey}:${this.apiSecret}`
     });
@@ -103,19 +71,30 @@ export class FalService {
 
   public async generateImage(prompt: string, negativePrompt?: string): Promise<string> {
     try {
-      const result = await fal.subscribe("fal-ai/flux-lora", {
-        input: {
-          prompt,
-          negative_prompt: negativePrompt,
-          image_size: 'landscape_4_3',
-          guidance_scale: 3.5,
-          num_inference_steps: 28,
-          num_images: 1,
-        } as GenerationInput,
-        logs: true,
-      }) as unknown as { data: FalGenerationResponse };
+      const result = await fetch('https://queue.fal.run/fal-ai/flux-lora/subscribe', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Key ${this.apiKey}:${this.apiSecret}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          input: {
+            prompt,
+            negative_prompt: negativePrompt,
+            image_size: 'landscape_4_3',
+            guidance_scale: 3.5,
+            num_inference_steps: 28,
+            num_images: 1
+          }
+        }),
+      });
 
-      return result.data.images[0].url;
+      if (!result.ok) {
+        throw new Error(`Generation failed with status ${result.status}`);
+      }
+
+      const response = await result.json() as FalGenerationResponse;
+      return response.images[0].url;
     } catch (error) {
       logger.error({ error }, 'Image generation failed');
       throw error;
