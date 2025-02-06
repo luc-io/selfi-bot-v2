@@ -24,9 +24,12 @@ if (!falKey) {
   throw new Error('FAL_KEY environment variable is not set');
 }
 
+// Now TypeScript knows falKey is string
+const credentials: string = falKey;
+
 // Configure Fal client with environment variables
 fal.config({
-  credentials: falKey
+  credentials
 });
 
 export async function generateImage(params: GenerateImageParams): Promise<GenerationResponse> {
