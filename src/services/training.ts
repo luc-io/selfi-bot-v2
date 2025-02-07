@@ -27,6 +27,7 @@ interface FalTrainingResponse {
 interface FalQueueStatusResponse {
   status: string;
   logs?: Array<{ message: string }>;
+  requestId: string;
 }
 
 interface FalQueueResultResponse {
@@ -104,7 +105,7 @@ export class TrainingService {
       .find((msg) => msg?.includes('progress'));
 
     if (progressLog) {
-      const match = progressLog.match(/(\\d+)%/);
+      const match = progressLog.match(/(\d+)%/);
       if (match) {
         progress = parseInt(match[1]);
       }
@@ -148,7 +149,6 @@ export class TrainingService {
     try {
       logger.info({ params }, 'Starting model training');
 
-      // Initialize training progress
       const result = await fal.subscribe("fal-ai/flux-lora-fast-training", {
         input: {
           images_data_url: params.images_data_url,
@@ -160,12 +160,12 @@ export class TrainingService {
         logs: true,
         onQueueUpdate: (update: FalQueueStatusResponse) => {
           if (update.status === "IN_PROGRESS") {
-            // Update progress tracking
-            this.updateTrainingProgress(result.requestId, update);
+            // Update progress tracking using the update's requestId
+            this.updateTrainingProgress(update.requestId, update);
 
             // Log progress messages
             update.logs?.map((log) => log.message).forEach((msg: string) => 
-              logger.info({ msg }, 'Training progress')
+              logger.info({ msg, requestId: update.requestId }, 'Training progress')
             );
           }
         },
@@ -182,7 +182,8 @@ export class TrainingService {
 
       logger.info({ 
         weightsUrl: trainingResult.weights.url,
-        configUrl: trainingResult.config.url 
+        configUrl: trainingResult.config.url,
+        requestId: result.requestId
       }, 'Training completed');
 
       return trainingResult;
