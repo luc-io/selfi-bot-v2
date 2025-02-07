@@ -7,6 +7,7 @@ import { paramsRoutes } from './routes/params.js';
 import { loraRoutes } from './routes/loras.js';
 import { trainingRoutes } from './routes/training.js';
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 
 export async function setupServer(server: FastifyInstance, bot: Bot<BotContext>) {
   if (!bot) {
@@ -20,6 +21,18 @@ export async function setupServer(server: FastifyInstance, bot: Bot<BotContext>)
     allowedHeaders: ['Content-Type', 'x-telegram-init-data', 'x-telegram-user-id']
   });
 
+  // Register multipart plugin
+  await server.register(multipart, {
+    limits: {
+      fieldNameSize: 100, // Max field name size in bytes
+      fieldSize: 1000000, // Max field value size in bytes
+      fields: 10, // Max number of non-file fields
+      fileSize: 10000000, // For multipart forms, the max file size in bytes
+      files: 1, // Max number of file fields
+      headerPairs: 2000 // Max number of header key=>value pairs
+    }
+  });
+
   // Add request hook to validate bot is initialized for webhook endpoints
   server.addHook('preHandler', async (request, reply) => {
     if (request.url.startsWith('/bot') && !bot.isInited()) {
@@ -31,7 +44,7 @@ export async function setupServer(server: FastifyInstance, bot: Bot<BotContext>)
   // Register API routes
   await server.register(paramsRoutes, { prefix: '/api' });
   await server.register(loraRoutes, { prefix: '/api' });
-  await server.register(trainingRoutes, { prefix: '/api' }); // Changed: Added /api prefix
+  await server.register(trainingRoutes, { prefix: '/api' });
   logger.info('API routes configured');
 
   // Webhook endpoint
