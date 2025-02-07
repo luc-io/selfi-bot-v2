@@ -32,14 +32,20 @@ export async function trainingRoutes(app: FastifyInstance) {
         type: 'object',
         required: ['x-telegram-user-id'],
         properties: {
-          'x-telegram-user-id': { type: 'string' }
+          'x-telegram-user-id': { type: 'string' },
+          'x-test-mode': { type: 'string' }
         }
       }
     }
   }, async (request, reply) => {
     try {
       const telegramId = request.headers['x-telegram-user-id'] as string;
+      const isTestMode = request.headers['x-test-mode'] === 'true';
       
+      if (isTestMode) {
+        logger.info('Test mode enabled for training');
+      }
+
       // Get all parts of the multipart request
       const parts = await request.parts();
       
@@ -168,16 +174,17 @@ export async function trainingRoutes(app: FastifyInstance) {
               imageUrls: [zipUrl],
               instancePrompt: params.trigger_word,
               steps: params.steps,
-              starsSpent: 10,
-              status: TrainStatus.PROCESSING
+              starsSpent: isTestMode ? 0 : 10,
+              status: TrainStatus.PROCESSING,
+              metadata: isTestMode ? JSON.stringify({ test_mode: true }) : undefined
             }
           });
 
           return [lora, training];
         });
 
-        // Start FAL training
-        logger.info({ loraId: lora.databaseId }, 'Starting FAL training');
+        // Start FAL training (or mock in test mode)
+        logger.info({ loraId: lora.databaseId, isTestMode }, 'Starting FAL training');
         
         const result = await trainingService.trainModel({
           images_data_url: zipUrl,
@@ -185,7 +192,7 @@ export async function trainingRoutes(app: FastifyInstance) {
           steps: params.steps,
           is_style: params.is_style,
           create_masks: params.create_masks
-        });
+        }, isTestMode);
 
         // Update records with results
         await prisma.$transaction([
@@ -202,7 +209,9 @@ export async function trainingRoutes(app: FastifyInstance) {
             data: { 
               status: TrainStatus.COMPLETED,
               completedAt: new Date(),
-              metadata: JSON.stringify(result)
+              metadata: isTestMode 
+                ? JSON.stringify({ test_mode: true, ...result }) 
+                : JSON.stringify(result)
             }
           })
         ]);
@@ -213,12 +222,14 @@ export async function trainingRoutes(app: FastifyInstance) {
         logger.info({
           loraId: lora.databaseId,
           trainingId: training.databaseId,
-          weightsUrl: result.weights.url
+          weightsUrl: result.weights.url,
+          isTestMode
         }, 'Training completed successfully');
 
         return reply.send({
           id: lora.databaseId,
-          trainingId: training.databaseId
+          trainingId: training.databaseId,
+          test_mode: isTestMode
         });
 
       } catch (error) {
@@ -254,11 +265,14 @@ export async function trainingRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: 'Training not found' });
       }
 
+      const isTestMode = training.metadata ? JSON.parse(training.metadata).test_mode : false;
+
       return reply.send({
         status: training.lora.status,
         metadata: training.metadata,
         error: training.error,
-        completedAt: training.completedAt
+        completedAt: training.completedAt,
+        test_mode: isTestMode
       });
     } catch (error) {
       logger.error({ error }, 'Failed to get training status');
