@@ -80,8 +80,14 @@ export async function trainingRoutes(app: FastifyInstance) {
             filename: file.filename,
             contentType: file.mimetype
           });
-        } else if (data.fieldname === 'params') {
-          params = JSON.parse(await data.value);
+        } else {
+          // For non-file part, read as text
+          const fieldData = await data.toBuffer();
+          const textValue = fieldData.toString();
+
+          if (data.fieldname === 'params') {
+            params = JSON.parse(textValue);
+          }
         }
       } catch (error) {
         logger.error({ error }, 'File processing error');
