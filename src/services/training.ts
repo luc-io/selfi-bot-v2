@@ -27,6 +27,7 @@ interface FalTrainingResponse {
 interface FalQueueStatusResponse {
   status: string;
   logs?: Array<{ message: string }>;
+  requestId: string;
 }
 
 interface FalQueueResultResponse {
@@ -88,67 +89,120 @@ export class TrainingService {
     };
   }
 
+  private getMockResult(trigger_word: string): TrainingResult {
+    return {
+      weights: {
+        url: `https://test-url/${trigger_word}_weights.safetensors`,
+        fileName: `${trigger_word}_weights.safetensors`,
+        fileSize: 1000000,
+        contentType: "application/octet-stream"
+      },
+      config: {
+        url: `https://test-url/${trigger_word}_config.json`,
+        fileName: `${trigger_word}_config.json`,
+        fileSize: 1000,
+        contentType: "application/json"
+      }
+    };
+  }
+
   public getTrainingProgress(requestId: string): TrainingProgress | null {
     return this.activeTrainings.get(requestId) || null;
   }
 
   private updateTrainingProgress(requestId: string, update: FalQueueStatusResponse) {
-    if (!update.logs) return;
+    if (!update.logs || update.logs.length === 0) {
+      logger.debug({ requestId }, 'No logs in update');
+      return;
+    }
 
     // Update progress based on logs
     let progress = 0;
-    let message = '';
+    let message = 'Processing...';
 
-    const progressLog = update.logs
-      .map((log) => log.message)
-      .find((msg) => msg?.includes('progress'));
+    try {
+      // Find progress message
+      const progressLog = update.logs
+        .map((log) => log.message)
+        .find((msg) => msg?.includes('progress'));
 
-    if (progressLog) {
-      const match = progressLog.match(/(\\d+)%/);
-      if (match) {
-        progress = parseInt(match[1]);
+      if (progressLog) {
+        const match = progressLog.match(/(\d+)%/);
+        if (match) {
+          progress = parseInt(match[1]);
+        }
       }
-    }
 
-    // Get last message
-    message = update.logs[update.logs.length - 1].message;
+      // Get last valid message
+      const lastValidMessage = update.logs
+        .filter(log => log && log.message)
+        .slice(-1)[0];
 
-    // Update status
-    let currentStatus: TrainingProgress['status'] = 'training';
-    if (update.status === 'COMPLETED') {
-      currentStatus = 'completed';
-      this.activeTrainings.set(requestId, {
-        status: 'completed',
-        progress: 100,
-        message: 'Training completed successfully'
-      });
+      if (lastValidMessage) {
+        message = lastValidMessage.message;
+      }
 
-      // Clean up after delay
-      setTimeout(() => {
-        this.activeTrainings.delete(requestId);
-      }, 60 * 1000); // Remove after 1 minute
-    } else if (update.status === 'FAILED') {
-      currentStatus = 'failed';
-      this.activeTrainings.set(requestId, {
-        status: 'failed',
-        progress,
-        message: 'Training failed'
-      });
-    } else {
-      // Update training status
-      this.activeTrainings.set(requestId, {
-        status: currentStatus,
-        progress,
-        message
-      });
+      // Update status
+      let currentStatus: TrainingProgress['status'] = 'training';
+      
+      if (update.status === 'COMPLETED') {
+        currentStatus = 'completed';
+        progress = 100;
+        message = 'Training completed successfully';
+
+        this.activeTrainings.set(requestId, {
+          status: currentStatus,
+          progress,
+          message
+        });
+
+        // Clean up after delay
+        setTimeout(() => {
+          this.activeTrainings.delete(requestId);
+        }, 60 * 1000); // Remove after 1 minute
+      } else if (update.status === 'FAILED') {
+        currentStatus = 'failed';
+        message = 'Training failed';
+
+        this.activeTrainings.set(requestId, {
+          status: currentStatus,
+          progress,
+          message
+        });
+      } else {
+        // Update training status
+        this.activeTrainings.set(requestId, {
+          status: currentStatus,
+          progress,
+          message
+        });
+      }
+
+      logger.debug({ 
+        requestId, 
+        status: currentStatus, 
+        progress, 
+        message 
+      }, 'Updated training progress');
+    } catch (error) {
+      logger.error({ 
+        error, 
+        requestId,
+        updateData: update 
+      }, 'Error processing training update');
     }
   }
 
-  public async trainModel(params: TrainModelParams): Promise<TrainingResult> {
+  public async trainModel(params: TrainModelParams, isTest: boolean = false): Promise<TrainingResult> {
     try {
-      logger.info({ params }, 'Starting model training');
+      logger.info({ params, isTest }, 'Starting model training');
 
-      // Initialize training progress
+      // Return mock result if in test mode
+      if (isTest) {
+        logger.info('Test mode: Returning mock training result');
+        return this.getMockResult(params.trigger_word);
+      }
+
       const result = await fal.subscribe("fal-ai/flux-lora-fast-training", {
         input: {
           images_data_url: params.images_data_url,
@@ -160,13 +214,18 @@ export class TrainingService {
         logs: true,
         onQueueUpdate: (update: FalQueueStatusResponse) => {
           if (update.status === "IN_PROGRESS") {
-            // Update progress tracking
-            this.updateTrainingProgress(result.requestId, update);
+            // Update progress tracking using the update's requestId
+            this.updateTrainingProgress(update.requestId, update);
 
-            // Log progress messages
-            update.logs?.map((log) => log.message).forEach((msg: string) => 
-              logger.info({ msg }, 'Training progress')
-            );
+            // Log progress messages if available
+            if (update.logs && update.logs.length > 0) {
+              update.logs
+                .filter(log => log && log.message)
+                .forEach(log => logger.info({ 
+                  msg: log.message, 
+                  requestId: update.requestId 
+                }, 'Training progress'));
+            }
           }
         },
       }) as unknown as FalQueueResultResponse;
@@ -182,7 +241,8 @@ export class TrainingService {
 
       logger.info({ 
         weightsUrl: trainingResult.weights.url,
-        configUrl: trainingResult.config.url 
+        configUrl: trainingResult.config.url,
+        requestId: result.requestId
       }, 'Training completed');
 
       return trainingResult;
