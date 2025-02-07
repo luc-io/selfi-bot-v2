@@ -94,54 +94,85 @@ export class TrainingService {
   }
 
   private updateTrainingProgress(requestId: string, update: FalQueueStatusResponse) {
-    if (!update.logs) return;
+    if (!update.logs || update.logs.length === 0) {
+      logger.debug({ requestId }, 'No logs in update');
+      return;
+    }
 
     // Update progress based on logs
     let progress = 0;
-    let message = '';
+    let message = 'Processing...';
 
-    const progressLog = update.logs
-      .map((log) => log.message)
-      .find((msg) => msg?.includes('progress'));
+    try {
+      // Find progress message
+      const progressLog = update.logs
+        .map((log) => log.message)
+        .find((msg) => msg?.includes('progress'));
 
-    if (progressLog) {
-      const match = progressLog.match(/(\d+)%/);
-      if (match) {
-        progress = parseInt(match[1]);
+      if (progressLog) {
+        const match = progressLog.match(/(\d+)%/);
+        if (match) {
+          progress = parseInt(match[1]);
+        }
       }
-    }
 
-    // Get last message
-    message = update.logs[update.logs.length - 1].message;
+      // Get last valid message
+      const lastValidMessage = update.logs
+        .filter(log => log && log.message)
+        .slice(-1)[0];
 
-    // Update status
-    let currentStatus: TrainingProgress['status'] = 'training';
-    if (update.status === 'COMPLETED') {
-      currentStatus = 'completed';
-      this.activeTrainings.set(requestId, {
-        status: 'completed',
-        progress: 100,
-        message: 'Training completed successfully'
-      });
+      if (lastValidMessage) {
+        message = lastValidMessage.message;
+      }
 
-      // Clean up after delay
-      setTimeout(() => {
-        this.activeTrainings.delete(requestId);
-      }, 60 * 1000); // Remove after 1 minute
-    } else if (update.status === 'FAILED') {
-      currentStatus = 'failed';
-      this.activeTrainings.set(requestId, {
-        status: 'failed',
-        progress,
-        message: 'Training failed'
-      });
-    } else {
-      // Update training status
-      this.activeTrainings.set(requestId, {
-        status: currentStatus,
-        progress,
-        message
-      });
+      // Update status
+      let currentStatus: TrainingProgress['status'] = 'training';
+      
+      if (update.status === 'COMPLETED') {
+        currentStatus = 'completed';
+        progress = 100;
+        message = 'Training completed successfully';
+
+        this.activeTrainings.set(requestId, {
+          status: currentStatus,
+          progress,
+          message
+        });
+
+        // Clean up after delay
+        setTimeout(() => {
+          this.activeTrainings.delete(requestId);
+        }, 60 * 1000); // Remove after 1 minute
+      } else if (update.status === 'FAILED') {
+        currentStatus = 'failed';
+        message = 'Training failed';
+
+        this.activeTrainings.set(requestId, {
+          status: currentStatus,
+          progress,
+          message
+        });
+      } else {
+        // Update training status
+        this.activeTrainings.set(requestId, {
+          status: currentStatus,
+          progress,
+          message
+        });
+      }
+
+      logger.debug({ 
+        requestId, 
+        status: currentStatus, 
+        progress, 
+        message 
+      }, 'Updated training progress');
+    } catch (error) {
+      logger.error({ 
+        error, 
+        requestId,
+        updateData: update 
+      }, 'Error processing training update');
     }
   }
 
@@ -163,10 +194,15 @@ export class TrainingService {
             // Update progress tracking using the update's requestId
             this.updateTrainingProgress(update.requestId, update);
 
-            // Log progress messages
-            update.logs?.map((log) => log.message).forEach((msg: string) => 
-              logger.info({ msg, requestId: update.requestId }, 'Training progress')
-            );
+            // Log progress messages if available
+            if (update.logs && update.logs.length > 0) {
+              update.logs
+                .filter(log => log && log.message)
+                .forEach(log => logger.info({ 
+                  msg: log.message, 
+                  requestId: update.requestId 
+                }, 'Training progress'));
+            }
           }
         },
       }) as unknown as FalQueueResultResponse;
