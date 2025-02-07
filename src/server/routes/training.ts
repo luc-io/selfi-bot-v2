@@ -40,12 +40,9 @@ export async function trainingRoutes(app: FastifyInstance) {
     try {
       const telegramId = request.headers['x-telegram-user-id'] as string;
       
-      // Parse multipart form data
-      const data = await request.file();
-      if (!data) {
-        return reply.status(400).send({ error: 'No files uploaded' });
-      }
-
+      // Get all parts of the multipart request
+      const parts = await request.parts();
+      
       // Extract files and parameters with limits
       const files: TrainingFile[] = [];
       let params: TrainingStartRequest | null = null;
@@ -53,40 +50,46 @@ export async function trainingRoutes(app: FastifyInstance) {
 
       // Handle multipart data
       try {
-        if (data.type === 'file') {
-          const file = data;
+        for await (const part of parts) {
+          if (part.type === 'file') {
+            const file = part;
 
-          // Check file size
-          if (file.file.bytesRead > MAX_FILE_SIZE) {
-            throw new Error(`File ${file.filename} exceeds maximum size of 10MB`);
-          }
+            // Check file size
+            const buffer = await file.toBuffer();
+            const fileSize = buffer.length;
 
-          // Check total size
-          totalSize += file.file.bytesRead;
-          if (totalSize > MAX_TOTAL_SIZE) {
-            throw new Error('Total upload size exceeds 50MB limit');
-          }
+            if (fileSize > MAX_FILE_SIZE) {
+              throw new Error(`File ${file.filename} exceeds maximum size of 10MB`);
+            }
 
-          // Check file count
-          if (files.length >= MAX_FILES) {
-            throw new Error('Maximum number of files (20) exceeded');
-          }
+            // Check total size
+            totalSize += fileSize;
+            if (totalSize > MAX_TOTAL_SIZE) {
+              throw new Error('Total upload size exceeds 50MB limit');
+            }
 
-          // Process file buffer
-          const buffer = await file.toBuffer();
+            // Check file count
+            if (files.length >= MAX_FILES) {
+              throw new Error('Maximum number of files (20) exceeded');
+            }
 
-          files.push({
-            buffer,
-            filename: file.filename,
-            contentType: file.mimetype
-          });
-        } else {
-          // For non-file part, read as text
-          const fieldData = await data.toBuffer();
-          const textValue = fieldData.toString();
-
-          if (data.fieldname === 'params') {
-            params = JSON.parse(textValue);
+            files.push({
+              buffer,
+              filename: file.filename,
+              contentType: file.mimetype
+            });
+          } else {
+            // For non-file parts
+            if (part.fieldname === 'params') {
+              try {
+                const paramsString = part.value.toString();
+                logger.info({ paramsString }, 'Received params');
+                params = JSON.parse(paramsString);
+              } catch (error) {
+                logger.error({ error, value: part.value }, 'Failed to parse params');
+                throw new Error('Invalid params format');
+              }
+            }
           }
         }
       } catch (error) {
@@ -97,6 +100,10 @@ export async function trainingRoutes(app: FastifyInstance) {
 
       if (!params) {
         return reply.status(400).send({ error: 'Missing training parameters' });
+      }
+
+      if (files.length === 0) {
+        return reply.status(400).send({ error: 'No files uploaded' });
       }
 
       if (!telegramId) {
