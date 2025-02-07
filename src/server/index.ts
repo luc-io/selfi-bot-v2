@@ -31,7 +31,7 @@ export async function setupServer(server: FastifyInstance, bot: Bot<BotContext>)
   // Register API routes
   await server.register(paramsRoutes, { prefix: '/api' });
   await server.register(loraRoutes, { prefix: '/api' });
-  await server.register(trainingRoutes, { prefix: '' }); // Keep the original path
+  await server.register(trainingRoutes, { prefix: '/api' }); // Changed: Added /api prefix
   logger.info('API routes configured');
 
   // Webhook endpoint
