@@ -3,16 +3,21 @@ import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
 import { LoraStatus, TrainStatus } from '@prisma/client';
 import { TrainingService } from '../../services/training.js';
+import { StorageService } from '../../services/storage.js';
+import { createTrainingArchive, type TrainingFile } from '../../lib/zip.js';
+import type { MultipartFile } from '@fastify/multipart';
 
 interface TrainingStartRequest {
   steps: number;
   is_style: boolean;
   create_masks: boolean;
   trigger_word: string;
-  images_data_url: string;
+  captions: Record<string, string>;
 }
 
+// Services
 const trainingService = new TrainingService();
+const storageService = new StorageService();
 
 export async function trainingRoutes(app: FastifyInstance) {
   // Start training
@@ -24,23 +29,40 @@ export async function trainingRoutes(app: FastifyInstance) {
         properties: {
           'x-telegram-user-id': { type: 'string' }
         }
-      },
-      body: {
-        type: 'object',
-        required: ['steps', 'trigger_word', 'images_data_url'],
-        properties: {
-          steps: { type: 'number' },
-          is_style: { type: 'boolean' },
-          create_masks: { type: 'boolean' },
-          trigger_word: { type: 'string' },
-          images_data_url: { type: 'string' }
-        }
       }
     }
   }, async (request, reply) => {
     try {
       const telegramId = request.headers['x-telegram-user-id'] as string;
-      const params = request.body as TrainingStartRequest;
+      
+      // Parse multipart form data
+      const data = await request.file();
+      if (!data) {
+        return reply.status(400).send({ error: 'No files uploaded' });
+      }
+
+      // Extract files and parameters
+      const files: TrainingFile[] = [];
+      let params: TrainingStartRequest | null = null;
+
+      // Handle multipart data
+      for await (const part of data) {
+        if (part.type === 'file') {
+          const file = part as MultipartFile;
+          const buffer = await file.toBuffer();
+          files.push({
+            buffer,
+            filename: file.filename,
+            contentType: file.mimetype
+          });
+        } else if (part.fieldname === 'params') {
+          params = JSON.parse(await part.value);
+        }
+      }
+
+      if (!params) {
+        return reply.status(400).send({ error: 'Missing training parameters' });
+      }
 
       if (!telegramId) {
         return reply.status(400).send({ error: 'Missing user ID' });
@@ -54,6 +76,20 @@ export async function trainingRoutes(app: FastifyInstance) {
       if (!user) {
         return reply.status(404).send({ error: 'User not found' });
       }
+
+      // Create training zip
+      const zipBuffer = await createTrainingArchive({
+        files,
+        captions: params.captions
+      });
+
+      // Upload to storage
+      const zipUrl = await storageService.uploadFile(zipBuffer, {
+        key: `training/${user.databaseId}/${Date.now()}.zip`,
+        contentType: 'application/zip',
+        expiresIn: 24 * 60 * 60, // 24 hours
+        public: true
+      });
 
       // Create LoRA model and training records
       const [lora, training] = await prisma.$transaction(async (tx) => {
@@ -72,7 +108,7 @@ export async function trainingRoutes(app: FastifyInstance) {
             lora: { connect: { databaseId: lora.databaseId } },
             user: { connect: { telegramId } },
             baseModel: { connect: { modelPath: 'fal-ai/flux-lora-fast-training' } },
-            imageUrls: [params.images_data_url],
+            imageUrls: [zipUrl],
             instancePrompt: params.trigger_word,
             steps: params.steps,
             starsSpent: 10,
@@ -87,7 +123,7 @@ export async function trainingRoutes(app: FastifyInstance) {
       logger.info({ loraId: lora.databaseId }, 'Starting FAL training');
       
       const result = await trainingService.trainModel({
-        images_data_url: params.images_data_url,
+        images_data_url: zipUrl,
         trigger_word: params.trigger_word,
         steps: params.steps,
         is_style: params.is_style,
@@ -113,6 +149,9 @@ export async function trainingRoutes(app: FastifyInstance) {
           }
         })
       ]);
+
+      // Clean up zip file
+      await storageService.deleteFile(`training/${user.databaseId}/${Date.now()}.zip`);
 
       logger.info({
         loraId: lora.databaseId,
