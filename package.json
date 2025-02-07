@@ -5,9 +5,9 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "build": "rimraf dist && tsc",
+    "build": "NODE_OPTIONS='--max-old-space-size=4096' rimraf dist && tsc",
     "start": "node --max-old-space-size=4096 --expose-gc dist/index.js",
-    "dev": "ts-node-dev --respawn src/index.ts"
+    "dev": "NODE_OPTIONS='--max-old-space-size=4096' ts-node-dev --respawn src/index.ts"
   },
   "dependencies": {
     "@fal-ai/client": "^1.2.3",
