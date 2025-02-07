@@ -2,7 +2,7 @@ import AWS from 'aws-sdk';
 import { randomBytes } from 'crypto';
 import { logger } from '../lib/logger.js';
 
-if (!process.env.DO_SPACES_KEY || !process.env.DO_SPACES_SECRET || !process.env.DO_SPACES_BUCKET || !process.env.DO_SPACES_ENDPOINT) {
+if (!process.env.SPACES_KEY || !process.env.SPACES_SECRET || !process.env.SPACES_BUCKET || !process.env.SPACES_ENDPOINT) {
   throw new Error('Digital Ocean Spaces credentials not configured');
 }
 
@@ -18,12 +18,12 @@ export class StorageService {
   private bucket: string;
 
   constructor() {
-    this.bucket = process.env.DO_SPACES_BUCKET as string;
+    this.bucket = process.env.SPACES_BUCKET as string;
 
     this.s3 = new AWS.S3({
-      endpoint: process.env.DO_SPACES_ENDPOINT,
-      accessKeyId: process.env.DO_SPACES_KEY,
-      secretAccessKey: process.env.DO_SPACES_SECRET,
+      endpoint: new URL(process.env.SPACES_ENDPOINT).hostname,
+      accessKeyId: process.env.SPACES_KEY,
+      secretAccessKey: process.env.SPACES_SECRET,
       signatureVersion: 'v4'
     });
   }
@@ -59,7 +59,7 @@ export class StorageService {
       // Get URL
       if (options.public) {
         // Return public URL if ACL is public-read
-        return `https://${this.bucket}.${process.env.DO_SPACES_ENDPOINT}/${key}`;
+        return `${process.env.SPACES_ENDPOINT}/${key}`;
       } else {
         // Generate signed URL
         return this.getSignedUrl(key, options.expiresIn);
