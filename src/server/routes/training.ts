@@ -82,11 +82,14 @@ export async function trainingRoutes(app: FastifyInstance) {
             // For non-file parts
             if (part.fieldname === 'params') {
               try {
-                const paramsString = part.value.toString();
-                logger.info({ paramsString }, 'Received params');
-                params = JSON.parse(paramsString);
+                const value = await part.value;
+                if (typeof value !== 'string') {
+                  throw new Error('Invalid params format: expected string');
+                }
+                logger.info({ value }, 'Received params');
+                params = JSON.parse(value);
               } catch (error) {
-                logger.error({ error, value: part.value }, 'Failed to parse params');
+                logger.error({ error }, 'Failed to parse params');
                 throw new Error('Invalid params format');
               }
             }
