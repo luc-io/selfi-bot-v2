@@ -53,7 +53,8 @@ export async function trainingRoutes(app: FastifyInstance) {
 
       // Handle multipart data
       try {
-        for await (const part of data) {
+        const parts = await data.toBuffers();
+        for (const part of parts) {
           if (part.type === 'file') {
             const file = part as MultipartFile;
 
@@ -73,12 +74,8 @@ export async function trainingRoutes(app: FastifyInstance) {
               throw new Error('Maximum number of files (20) exceeded');
             }
 
-            // Process file in chunks to save memory
-            const chunks: Buffer[] = [];
-            for await (const chunk of file.file) {
-              chunks.push(chunk);
-            }
-            const buffer = Buffer.concat(chunks);
+            // Process file buffer
+            const buffer = await file.toBuffer();
 
             files.push({
               buffer,
@@ -92,7 +89,8 @@ export async function trainingRoutes(app: FastifyInstance) {
         }
       } catch (error) {
         logger.error({ error }, 'File processing error');
-        return reply.status(400).send({ error: error.message });
+        const errorMessage = error instanceof Error ? error.message : 'File processing error';
+        return reply.status(400).send({ error: errorMessage });
       }
 
       if (!params) {
@@ -223,7 +221,8 @@ export async function trainingRoutes(app: FastifyInstance) {
 
     } catch (error) {
       logger.error({ error }, 'Failed to start training');
-      reply.status(500).send({ error: 'Failed to start training' });
+      const errorMessage = error instanceof Error ? error.message : 'Failed to start training';
+      reply.status(500).send({ error: errorMessage });
     }
   });
 
@@ -251,7 +250,8 @@ export async function trainingRoutes(app: FastifyInstance) {
       });
     } catch (error) {
       logger.error({ error }, 'Failed to get training status');
-      reply.status(500).send({ error: 'Failed to get training status' });
+      const errorMessage = error instanceof Error ? error.message : 'Failed to get training status';
+      reply.status(500).send({ error: errorMessage });
     }
   });
 
