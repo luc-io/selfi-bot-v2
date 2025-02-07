@@ -19,9 +19,14 @@ export class StorageService {
 
   constructor() {
     this.bucket = process.env.SPACES_BUCKET as string;
+    const endpoint = process.env.SPACES_ENDPOINT;
+
+    if (!endpoint) {
+      throw new Error('SPACES_ENDPOINT environment variable is not set');
+    }
 
     this.s3 = new AWS.S3({
-      endpoint: new URL(process.env.SPACES_ENDPOINT).hostname,
+      endpoint: new URL(endpoint).hostname,
       accessKeyId: process.env.SPACES_KEY,
       secretAccessKey: process.env.SPACES_SECRET,
       signatureVersion: 'v4'
@@ -57,9 +62,14 @@ export class StorageService {
       await this.s3.putObject(params).promise();
 
       // Get URL
+      const endpoint = process.env.SPACES_ENDPOINT;
+      if (!endpoint) {
+        throw new Error('SPACES_ENDPOINT environment variable is not set');
+      }
+
       if (options.public) {
         // Return public URL if ACL is public-read
-        return `${process.env.SPACES_ENDPOINT}/${key}`;
+        return `${endpoint}/${key}`;
       } else {
         // Generate signed URL
         return this.getSignedUrl(key, options.expiresIn);
