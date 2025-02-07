@@ -176,7 +176,7 @@ export async function trainingRoutes(app: FastifyInstance) {
               steps: params.steps,
               starsSpent: isTestMode ? 0 : 10,
               status: TrainStatus.PROCESSING,
-              metadata: isTestMode ? JSON.stringify({ test_mode: true }) : undefined
+              metadata: isTestMode ? { test_mode: true } : null
             }
           });
 
@@ -210,8 +210,8 @@ export async function trainingRoutes(app: FastifyInstance) {
               status: TrainStatus.COMPLETED,
               completedAt: new Date(),
               metadata: isTestMode 
-                ? JSON.stringify({ test_mode: true, ...result }) 
-                : JSON.stringify(result)
+                ? { test_mode: true, ...result }
+                : result
             }
           })
         ]);
@@ -265,7 +265,8 @@ export async function trainingRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: 'Training not found' });
       }
 
-      const isTestMode = training.metadata ? JSON.parse(training.metadata).test_mode : false;
+      const metadata = training.metadata as Record<string, unknown> | null;
+      const isTestMode = metadata ? Boolean(metadata.test_mode) : false;
 
       return reply.send({
         status: training.lora.status,
