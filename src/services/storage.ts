@@ -16,20 +16,21 @@ export interface UploadOptions {
 export class StorageService {
   private s3: AWS.S3;
   private bucket: string;
+  private endpoint: string;
 
   constructor() {
     this.bucket = process.env.SPACES_BUCKET as string;
-    const endpoint = process.env.SPACES_ENDPOINT;
+    this.endpoint = process.env.SPACES_ENDPOINT as string;
 
-    if (!endpoint) {
-      throw new Error('SPACES_ENDPOINT environment variable is not set');
-    }
+    // For DO Spaces, we need to use the region endpoint (e.g., nyc3.digitaloceanspaces.com)
+    const spacesEndpoint = new AWS.Endpoint('nyc3.digitaloceanspaces.com');
 
     this.s3 = new AWS.S3({
-      endpoint: new URL(endpoint).hostname,
+      endpoint: spacesEndpoint,
       accessKeyId: process.env.SPACES_KEY,
       secretAccessKey: process.env.SPACES_SECRET,
-      signatureVersion: 'v4'
+      signatureVersion: 'v4',
+      region: 'nyc3' // Add region for proper signing
     });
   }
 
@@ -62,14 +63,9 @@ export class StorageService {
       await this.s3.putObject(params).promise();
 
       // Get URL
-      const endpoint = process.env.SPACES_ENDPOINT;
-      if (!endpoint) {
-        throw new Error('SPACES_ENDPOINT environment variable is not set');
-      }
-
       if (options.public) {
         // Return public URL if ACL is public-read
-        return `${endpoint}/${key}`;
+        return `https://${this.bucket}.nyc3.digitaloceanspaces.com/${key}`;
       } else {
         // Generate signed URL
         return this.getSignedUrl(key, options.expiresIn);
