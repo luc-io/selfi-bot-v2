@@ -128,11 +128,8 @@ export async function trainingRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: 'User not found' });
       }
 
-      // Create unique ID for this training
-      const trainingId = `${user.databaseId}_${Date.now()}`;
-
       try {
-        // Create training zip
+        // Create zipBuffer first
         const zipBuffer = await createTrainingArchive({
           files,
           captions: params.captions
@@ -142,19 +139,7 @@ export async function trainingRoutes(app: FastifyInstance) {
         files.forEach(f => f.buffer = Buffer.alloc(0));
         if (global.gc) global.gc();
 
-        // Upload to storage
-        const zipUrl = await storageService.uploadFile(zipBuffer, {
-          key: `training/${trainingId}.zip`,
-          contentType: 'application/zip',
-          expiresIn: 24 * 60 * 60, // 24 hours
-          public: true
-        });
-
-        // Clear zip buffer
-        zipBuffer.fill(0);
-        if (global.gc) global.gc();
-
-        // Create LoRA model and training records
+        // Create LoRA model and training records first to get the databaseId
         const [lora, training] = await prisma.$transaction(async (tx) => {
           const lora = await tx.loraModel.create({
             data: {
@@ -173,7 +158,6 @@ export async function trainingRoutes(app: FastifyInstance) {
               lora: { connect: { databaseId: lora.databaseId } },
               user: { connect: { telegramId } },
               baseModel: { connect: { modelPath: 'fal-ai/flux-lora-fast-training' } },
-              imageUrls: [zipUrl],
               instancePrompt: params.trigger_word,
               steps: params.steps,
               starsSpent: isTestMode ? 0 : 10,
@@ -185,8 +169,30 @@ export async function trainingRoutes(app: FastifyInstance) {
           return [lora, training];
         });
 
+        // Now use the training.databaseId for the file path
+        const zipUrl = await storageService.uploadFile(zipBuffer, {
+          key: `training/${training.databaseId}.zip`,
+          contentType: 'application/zip',
+          expiresIn: 24 * 60 * 60, // 24 hours
+          public: true
+        });
+
+        // Update training with the zip URL
+        await prisma.training.update({
+          where: { databaseId: training.databaseId },
+          data: { imageUrls: [zipUrl] }
+        });
+
+        // Clear zip buffer
+        zipBuffer.fill(0);
+        if (global.gc) global.gc();
+
         // Start FAL training (or mock in test mode)
-        logger.info({ loraId: lora.databaseId, isTestMode }, 'Starting FAL training');
+        logger.info({ 
+          trainingId: training.databaseId,
+          loraId: lora.databaseId, 
+          isTestMode 
+        }, 'Starting FAL training');
         
         const result = await trainingService.trainModel({
           images_data_url: zipUrl,
@@ -217,7 +223,7 @@ export async function trainingRoutes(app: FastifyInstance) {
             }
           }),
           prisma.training.update({
-            where: { loraId: lora.databaseId },
+            where: { databaseId: training.databaseId },
             data: { 
               status: TrainStatus.COMPLETED,
               completedAt: new Date(),
@@ -227,27 +233,29 @@ export async function trainingRoutes(app: FastifyInstance) {
         ]);
 
         // Clean up zip file
-        await storageService.deleteFile(`training/${trainingId}.zip`);
+        await storageService.deleteFile(`training/${training.databaseId}.zip`);
 
         logger.info({
-          loraId: lora.databaseId,
           trainingId: training.databaseId,
+          loraId: lora.databaseId,
           weightsUrl: result.weights.url,
           isTestMode
         }, 'Training completed successfully');
 
         return reply.send({
-          id: lora.databaseId,
           trainingId: training.databaseId,
+          loraId: lora.databaseId,
           test_mode: isTestMode
         });
 
       } catch (error) {
-        // Clean up any uploaded file on error
-        try {
-          await storageService.deleteFile(`training/${trainingId}.zip`);
-        } catch (cleanupError) {
-          logger.error({ cleanupError }, 'Failed to clean up training file');
+        // Clean up any uploaded file on error - note we now need to get the ID from the error context
+        if (error instanceof Error && 'trainingId' in error) {
+          try {
+            await storageService.deleteFile(`training/${(error as any).trainingId}.zip`);
+          } catch (cleanupError) {
+            logger.error({ cleanupError }, 'Failed to clean up training file');
+          }
         }
         throw error;
       }
@@ -259,13 +267,13 @@ export async function trainingRoutes(app: FastifyInstance) {
     }
   });
 
-  // Get training status
+  // Get training status by training ID
   app.get('/training/:id/status', async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
 
-      const training = await prisma.training.findFirst({
-        where: { loraId: id },
+      const training = await prisma.training.findUnique({
+        where: { databaseId: id },
         include: {
           lora: true
         }
@@ -279,6 +287,8 @@ export async function trainingRoutes(app: FastifyInstance) {
       const isTestMode = metadata ? Boolean(metadata.test_mode) : false;
 
       return reply.send({
+        trainingId: training.databaseId,
+        loraId: training.loraId,
         status: training.lora.status,
         metadata: training.metadata,
         error: training.error,
