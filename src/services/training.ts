@@ -29,6 +29,11 @@ interface FalQueueStatusResponse {
   logs?: Array<{ message: string }>;
 }
 
+interface FalQueueResultResponse {
+  data: FalTrainingResponse;
+  requestId: string;
+}
+
 export interface TrainModelParams {
   images_data_url: string;
   trigger_word: string;
@@ -58,17 +63,19 @@ export interface TrainingResult {
   };
 }
 
-const falKey = process.env.FAL_KEY;
-if (!falKey) {
+if (!process.env.FAL_KEY) {
   throw new Error('FAL_KEY environment variable is not set');
 }
+
+// Now TypeScript knows FAL_KEY is not undefined
+const credentials = process.env.FAL_KEY;
 
 export class TrainingService {
   private readonly activeTrainings = new Map<string, TrainingProgress>();
 
   constructor() {
     fal.config({
-      credentials: falKey
+      credentials
     });
   }
 
@@ -162,17 +169,15 @@ export class TrainingService {
             );
           }
         },
-      });
+      }) as unknown as FalQueueResultResponse;
 
-      const response = result.data as FalTrainingResponse;
-
-      if (!response?.diffusers_lora_file || !response?.config_file) {
+      if (!result.data?.diffusers_lora_file || !result.data?.config_file) {
         throw new Error('No data returned from training');
       }
 
       const trainingResult = {
-        weights: this.convertFileToJson(response.diffusers_lora_file),
-        config: this.convertFileToJson(response.config_file)
+        weights: this.convertFileToJson(result.data.diffusers_lora_file),
+        config: this.convertFileToJson(result.data.config_file)
       };
 
       logger.info({ 
