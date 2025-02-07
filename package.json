@@ -5,9 +5,9 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "build": "rimraf dist && tsc",
-    "start": "node dist/index.js",
-    "dev": "ts-node-dev --respawn src/index.ts"
+    "build": "rimraf dist && pnpm exec env NODE_OPTIONS='--max-old-space-size=8192' tsc",
+    "start": "pnpm exec node --max-old-space-size=4096 --expose-gc dist/index.js",
+    "dev": "pnpm exec env NODE_OPTIONS='--max-old-space-size=4096' ts-node-dev --respawn src/index.ts"
   },
   "dependencies": {
     "@fal-ai/client": "^1.2.3",
