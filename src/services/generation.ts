@@ -19,6 +19,19 @@ interface FalRequestParams {
   logs?: boolean;
 }
 
+const falKey = process.env.FAL_KEY;
+if (!falKey) {
+  throw new Error('FAL_KEY environment variable is not set');
+}
+
+// Now TypeScript knows falKey is string
+const credentials: string = falKey;
+
+// Configure Fal client with environment variables
+fal.config({
+  credentials
+});
+
 export async function generateImage(params: GenerateImageParams): Promise<GenerationResponse> {
   logger.info({ params }, 'Starting image generation with params');
   
@@ -82,6 +95,5 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
   };
 
   logger.info({ generationResponse }, 'Generation completed successfully');
-
   return generationResponse;
 }
