@@ -53,39 +53,35 @@ export async function trainingRoutes(app: FastifyInstance) {
 
       // Handle multipart data
       try {
-        const parts = await data.toBuffers();
-        for (const part of parts) {
-          if (part.type === 'file') {
-            const file = part as MultipartFile;
+        if (data.type === 'file') {
+          const file = data;
 
-            // Check file size
-            if (file.file.bytesRead > MAX_FILE_SIZE) {
-              throw new Error(`File ${file.filename} exceeds maximum size of 10MB`);
-            }
-
-            // Check total size
-            totalSize += file.file.bytesRead;
-            if (totalSize > MAX_TOTAL_SIZE) {
-              throw new Error('Total upload size exceeds 50MB limit');
-            }
-
-            // Check file count
-            if (files.length >= MAX_FILES) {
-              throw new Error('Maximum number of files (20) exceeded');
-            }
-
-            // Process file buffer
-            const buffer = await file.toBuffer();
-
-            files.push({
-              buffer,
-              filename: file.filename,
-              contentType: file.mimetype
-            });
-
-          } else if (part.fieldname === 'params') {
-            params = JSON.parse(await part.value);
+          // Check file size
+          if (file.file.bytesRead > MAX_FILE_SIZE) {
+            throw new Error(`File ${file.filename} exceeds maximum size of 10MB`);
           }
+
+          // Check total size
+          totalSize += file.file.bytesRead;
+          if (totalSize > MAX_TOTAL_SIZE) {
+            throw new Error('Total upload size exceeds 50MB limit');
+          }
+
+          // Check file count
+          if (files.length >= MAX_FILES) {
+            throw new Error('Maximum number of files (20) exceeded');
+          }
+
+          // Process file buffer
+          const buffer = await file.toBuffer();
+
+          files.push({
+            buffer,
+            filename: file.filename,
+            contentType: file.mimetype
+          });
+        } else if (data.fieldname === 'params') {
+          params = JSON.parse(await data.value);
         }
       } catch (error) {
         logger.error({ error }, 'File processing error');
