@@ -89,6 +89,23 @@ export class TrainingService {
     };
   }
 
+  private getMockResult(trigger_word: string): TrainingResult {
+    return {
+      weights: {
+        url: `https://test-url/${trigger_word}_weights.safetensors`,
+        fileName: `${trigger_word}_weights.safetensors`,
+        fileSize: 1000000,
+        contentType: "application/octet-stream"
+      },
+      config: {
+        url: `https://test-url/${trigger_word}_config.json`,
+        fileName: `${trigger_word}_config.json`,
+        fileSize: 1000,
+        contentType: "application/json"
+      }
+    };
+  }
+
   public getTrainingProgress(requestId: string): TrainingProgress | null {
     return this.activeTrainings.get(requestId) || null;
   }
@@ -176,9 +193,15 @@ export class TrainingService {
     }
   }
 
-  public async trainModel(params: TrainModelParams): Promise<TrainingResult> {
+  public async trainModel(params: TrainModelParams, isTest: boolean = false): Promise<TrainingResult> {
     try {
-      logger.info({ params }, 'Starting model training');
+      logger.info({ params, isTest }, 'Starting model training');
+
+      // Return mock result if in test mode
+      if (isTest) {
+        logger.info('Test mode: Returning mock training result');
+        return this.getMockResult(params.trigger_word);
+      }
 
       const result = await fal.subscribe("fal-ai/flux-lora-fast-training", {
         input: {
