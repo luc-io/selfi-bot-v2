@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
-import { LoraStatus, TrainStatus } from '@prisma/client';
+import { LoraStatus, TrainStatus, Prisma } from '@prisma/client';
 import { TrainingService } from '../../services/training.js';
 import { StorageService } from '../../services/storage.js';
 import { createTrainingArchive, type TrainingFile } from '../../lib/zip.js';
@@ -166,6 +166,8 @@ export async function trainingRoutes(app: FastifyInstance) {
             }
           });
 
+          const metadata: Prisma.JsonObject = isTestMode ? { test_mode: true } : {};
+
           const training = await tx.training.create({
             data: {
               lora: { connect: { databaseId: lora.databaseId } },
@@ -176,7 +178,7 @@ export async function trainingRoutes(app: FastifyInstance) {
               steps: params.steps,
               starsSpent: isTestMode ? 0 : 10,
               status: TrainStatus.PROCESSING,
-              metadata: isTestMode ? { test_mode: true } : null
+              metadata
             }
           });
 
@@ -194,6 +196,16 @@ export async function trainingRoutes(app: FastifyInstance) {
           create_masks: params.create_masks
         }, isTestMode);
 
+        // Convert result to a Prisma-compatible JSON object
+        const trainingResult: Prisma.JsonObject = {
+          weights: result.weights,
+          config: result.config
+        };
+
+        if (isTestMode) {
+          trainingResult.test_mode = true;
+        }
+
         // Update records with results
         await prisma.$transaction([
           prisma.loraModel.update({
@@ -209,9 +221,7 @@ export async function trainingRoutes(app: FastifyInstance) {
             data: { 
               status: TrainStatus.COMPLETED,
               completedAt: new Date(),
-              metadata: isTestMode 
-                ? { test_mode: true, ...result }
-                : result
+              metadata: trainingResult
             }
           })
         ]);
@@ -265,7 +275,7 @@ export async function trainingRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: 'Training not found' });
       }
 
-      const metadata = training.metadata as Record<string, unknown> | null;
+      const metadata = training.metadata as Prisma.JsonObject | null;
       const isTestMode = metadata ? Boolean(metadata.test_mode) : false;
 
       return reply.send({
