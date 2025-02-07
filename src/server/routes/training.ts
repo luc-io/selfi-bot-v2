@@ -15,6 +15,11 @@ interface TrainingStartRequest {
   captions: Record<string, string>;
 }
 
+// Max file size and count limits
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file
+const MAX_TOTAL_SIZE = 50 * 1024 * 1024; // 50MB total
+const MAX_FILES = 20;
+
 // Services
 const trainingService = new TrainingService();
 const storageService = new StorageService();
@@ -41,23 +46,53 @@ export async function trainingRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: 'No files uploaded' });
       }
 
-      // Extract files and parameters
+      // Extract files and parameters with limits
       const files: TrainingFile[] = [];
       let params: TrainingStartRequest | null = null;
+      let totalSize = 0;
 
       // Handle multipart data
-      for await (const part of data) {
-        if (part.type === 'file') {
-          const file = part as MultipartFile;
-          const buffer = await file.toBuffer();
-          files.push({
-            buffer,
-            filename: file.filename,
-            contentType: file.mimetype
-          });
-        } else if (part.fieldname === 'params') {
-          params = JSON.parse(await part.value);
+      try {
+        for await (const part of data) {
+          if (part.type === 'file') {
+            const file = part as MultipartFile;
+
+            // Check file size
+            if (file.file.bytesRead > MAX_FILE_SIZE) {
+              throw new Error(`File ${file.filename} exceeds maximum size of 10MB`);
+            }
+
+            // Check total size
+            totalSize += file.file.bytesRead;
+            if (totalSize > MAX_TOTAL_SIZE) {
+              throw new Error('Total upload size exceeds 50MB limit');
+            }
+
+            // Check file count
+            if (files.length >= MAX_FILES) {
+              throw new Error('Maximum number of files (20) exceeded');
+            }
+
+            // Process file in chunks to save memory
+            const chunks: Buffer[] = [];
+            for await (const chunk of file.file) {
+              chunks.push(chunk);
+            }
+            const buffer = Buffer.concat(chunks);
+
+            files.push({
+              buffer,
+              filename: file.filename,
+              contentType: file.mimetype
+            });
+
+          } else if (part.fieldname === 'params') {
+            params = JSON.parse(await part.value);
+          }
         }
+      } catch (error) {
+        logger.error({ error }, 'File processing error');
+        return reply.status(400).send({ error: error.message });
       }
 
       if (!params) {
@@ -77,92 +112,114 @@ export async function trainingRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: 'User not found' });
       }
 
-      // Create training zip
-      const zipBuffer = await createTrainingArchive({
-        files,
-        captions: params.captions
-      });
+      // Create unique ID for this training
+      const trainingId = `${user.databaseId}_${Date.now()}`;
 
-      // Upload to storage
-      const zipUrl = await storageService.uploadFile(zipBuffer, {
-        key: `training/${user.databaseId}/${Date.now()}.zip`,
-        contentType: 'application/zip',
-        expiresIn: 24 * 60 * 60, // 24 hours
-        public: true
-      });
-
-      // Create LoRA model and training records
-      const [lora, training] = await prisma.$transaction(async (tx) => {
-        const lora = await tx.loraModel.create({
-          data: {
-            name: params.trigger_word,
-            triggerWord: params.trigger_word,
-            status: LoraStatus.TRAINING,
-            baseModel: { connect: { modelPath: 'fal-ai/flux-lora-fast-training' } },
-            user: { connect: { telegramId } }
-          }
+      try {
+        // Create training zip
+        const zipBuffer = await createTrainingArchive({
+          files,
+          captions: params.captions
         });
 
-        const training = await tx.training.create({
-          data: {
-            lora: { connect: { databaseId: lora.databaseId } },
-            user: { connect: { telegramId } },
-            baseModel: { connect: { modelPath: 'fal-ai/flux-lora-fast-training' } },
-            imageUrls: [zipUrl],
-            instancePrompt: params.trigger_word,
-            steps: params.steps,
-            starsSpent: 10,
-            status: TrainStatus.PROCESSING
-          }
+        // Clear file buffers to help GC
+        files.forEach(f => f.buffer = Buffer.alloc(0));
+        if (global.gc) global.gc();
+
+        // Upload to storage
+        const zipUrl = await storageService.uploadFile(zipBuffer, {
+          key: `training/${trainingId}.zip`,
+          contentType: 'application/zip',
+          expiresIn: 24 * 60 * 60, // 24 hours
+          public: true
         });
 
-        return [lora, training];
-      });
+        // Clear zip buffer
+        zipBuffer.fill(0);
+        if (global.gc) global.gc();
 
-      // Start FAL training
-      logger.info({ loraId: lora.databaseId }, 'Starting FAL training');
-      
-      const result = await trainingService.trainModel({
-        images_data_url: zipUrl,
-        trigger_word: params.trigger_word,
-        steps: params.steps,
-        is_style: params.is_style,
-        create_masks: params.create_masks
-      });
+        // Create LoRA model and training records
+        const [lora, training] = await prisma.$transaction(async (tx) => {
+          const lora = await tx.loraModel.create({
+            data: {
+              name: params.trigger_word,
+              triggerWord: params.trigger_word,
+              status: LoraStatus.TRAINING,
+              baseModel: { connect: { modelPath: 'fal-ai/flux-lora-fast-training' } },
+              user: { connect: { telegramId } }
+            }
+          });
 
-      // Update records with results
-      await prisma.$transaction([
-        prisma.loraModel.update({
-          where: { databaseId: lora.databaseId },
-          data: {
-            weightsUrl: result.weights.url,
-            configUrl: result.config.url,
-            status: LoraStatus.COMPLETED
-          }
-        }),
-        prisma.training.update({
-          where: { loraId: lora.databaseId },
-          data: { 
-            status: TrainStatus.COMPLETED,
-            completedAt: new Date(),
-            metadata: JSON.stringify(result)
-          }
-        })
-      ]);
+          const training = await tx.training.create({
+            data: {
+              lora: { connect: { databaseId: lora.databaseId } },
+              user: { connect: { telegramId } },
+              baseModel: { connect: { modelPath: 'fal-ai/flux-lora-fast-training' } },
+              imageUrls: [zipUrl],
+              instancePrompt: params.trigger_word,
+              steps: params.steps,
+              starsSpent: 10,
+              status: TrainStatus.PROCESSING
+            }
+          });
 
-      // Clean up zip file
-      await storageService.deleteFile(`training/${user.databaseId}/${Date.now()}.zip`);
+          return [lora, training];
+        });
 
-      logger.info({
-        loraId: lora.databaseId,
-        trainingId: training.databaseId,
-        weightsUrl: result.weights.url
-      }, 'Training completed successfully');
+        // Start FAL training
+        logger.info({ loraId: lora.databaseId }, 'Starting FAL training');
+        
+        const result = await trainingService.trainModel({
+          images_data_url: zipUrl,
+          trigger_word: params.trigger_word,
+          steps: params.steps,
+          is_style: params.is_style,
+          create_masks: params.create_masks
+        });
 
-      return reply.send({
-        id: lora.databaseId,
-        trainingId: training.databaseId
-      });
+        // Update records with results
+        await prisma.$transaction([
+          prisma.loraModel.update({
+            where: { databaseId: lora.databaseId },
+            data: {
+              weightsUrl: result.weights.url,
+              configUrl: result.config.url,
+              status: LoraStatus.COMPLETED
+            }
+          }),
+          prisma.training.update({
+            where: { loraId: lora.databaseId },
+            data: { 
+              status: TrainStatus.COMPLETED,
+              completedAt: new Date(),
+              metadata: JSON.stringify(result)
+            }
+          })
+        ]);
+
+        // Clean up zip file
+        await storageService.deleteFile(`training/${trainingId}.zip`);
+
+        logger.info({
+          loraId: lora.databaseId,
+          trainingId: training.databaseId,
+          weightsUrl: result.weights.url
+        }, 'Training completed successfully');
+
+        return reply.send({
+          id: lora.databaseId,
+          trainingId: training.databaseId
+        });
+
+      } catch (error) {
+        // Clean up any uploaded file on error
+        try {
+          await storageService.deleteFile(`training/${trainingId}.zip`);
+        } catch (cleanupError) {
+          logger.error({ cleanupError }, 'Failed to clean up training file');
+        }
+        throw error;
+      }
 
     } catch (error) {
       logger.error({ error }, 'Failed to start training');
