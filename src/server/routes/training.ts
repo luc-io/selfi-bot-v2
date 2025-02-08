@@ -190,7 +190,7 @@ export async function trainingRoutes(app: FastifyInstance) {
               baseModel: { connect: { modelPath: 'fal-ai/flux-lora-fast-training' } },
               instancePrompt: params.trigger_word,
               steps: params.steps,
-              starsSpent: isTestMode ? 0 : 10,
+              starsSpent: isTestMode ? 0 : 150, // Set to training cost
               status: TrainStatus.PROCESSING,
               metadata
             }
@@ -225,6 +225,7 @@ export async function trainingRoutes(app: FastifyInstance) {
         }, 'Starting FAL training');
         
         const result = await trainingService.trainModel({
+          telegramId,
           images_data_url: zipUrl,
           trigger_word: params.trigger_word,
           steps: params.steps,
