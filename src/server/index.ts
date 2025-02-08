@@ -26,12 +26,11 @@ export async function setupServer(server: FastifyInstance, bot: Bot<BotContext>)
     limits: {
       fieldNameSize: 100, // Max field name size in bytes
       fieldSize: 1000000, // Max field value size in bytes (1MB)
-      fields: 10, // Max number of non-file fields
+      fields: 30, // Max number of non-file fields (increased to account for files + fields)
       fileSize: 25 * 1024 * 1024, // 25MB per file to match route limit
       files: 20, // Max number of files to match route limit
       headerPairs: 2000, // Max number of header key=>value pairs
-      totalFields: 30, // Total fields including files (20 files + 10 fields)
-      totalFieldsSize: 300 * 1024 * 1024 // 300MB total to match nginx
+      parts: 50 // Total number of parts (files + fields)
     }
   });
 
