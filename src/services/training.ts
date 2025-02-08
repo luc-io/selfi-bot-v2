@@ -260,32 +260,43 @@ export class TrainingService {
         config: this.convertFileToJson(result.data.config_file)
       };
 
-      // After successful training, deduct stars
-      await StarsService.updateStars(params.telegramId, {
-        amount: -this.TRAINING_COST,
-        type: 'TRAINING',
-        metadata: {
-          trigger_word: params.trigger_word,
-          steps: params.steps,
-          is_style: params.is_style
-        }
-      });
+      // After successful training, deduct stars and update training record
+      if (!isTest) {
+        await StarsService.updateStars(params.telegramId, {
+          amount: -this.TRAINING_COST,
+          type: 'TRAINING',
+          metadata: {
+            trigger_word: params.trigger_word,
+            steps: params.steps,
+            is_style: params.is_style
+          }
+        });
 
-      // Update training record with stars spent
-      await prisma.training.update({
-        where: {
-          id: result.requestId
-        },
-        data: {
-          starsSpent: this.TRAINING_COST
+        // Find training record by result.requestId in loraId
+        const training = await prisma.training.findFirst({
+          where: { loraId: result.requestId }
+        });
+
+        if (training) {
+          // Update training record with stars spent
+          await prisma.training.update({
+            where: { databaseId: training.databaseId },
+            data: {
+              starsSpent: this.TRAINING_COST
+            }
+          });
+        } else {
+          logger.warn({ 
+            requestId: result.requestId 
+          }, 'Could not find training record to update stars spent');
         }
-      });
+      }
 
       logger.info({ 
         weightsUrl: trainingResult.weights.url,
         configUrl: trainingResult.config.url,
         requestId: result.requestId,
-        starsSpent: this.TRAINING_COST
+        starsSpent: isTest ? 0 : this.TRAINING_COST
       }, 'Training completed');
 
       return trainingResult;
