@@ -36,10 +36,14 @@ fal.config({
 export async function generateImage(params: GenerateImageParams & { telegramId: string }): Promise<GenerationResponse> {
   logger.info({ params }, 'Starting image generation with params');
 
+  // Calculate required stars (1 star per image)
+  const numImages = params.numImages ?? 1;
+  const requiredStars = numImages;
+
   // Check if user has enough stars
-  const hasEnoughStars = await StarsService.checkBalance(params.telegramId, 1);
+  const hasEnoughStars = await StarsService.checkBalance(params.telegramId, requiredStars);
   if (!hasEnoughStars) {
-    throw new Error('Insufficient stars');
+    throw new Error(`Insufficient stars. Required: ${requiredStars} stars for ${numImages} images`);
   }
   
   const requestParams: FalRequestParams = {
@@ -49,7 +53,7 @@ export async function generateImage(params: GenerateImageParams & { telegramId: 
       num_inference_steps: params.numInferenceSteps ?? 28,
       seed: params.seed,
       guidance_scale: params.guidanceScale ?? 3.5,
-      num_images: params.numImages ?? 1,
+      num_images: numImages,
       enable_safety_checker: params.enableSafetyChecker ?? true,
       output_format: params.outputFormat ?? 'jpeg'
     },
@@ -102,13 +106,14 @@ export async function generateImage(params: GenerateImageParams & { telegramId: 
       hasNsfwConcepts: result.data.has_nsfw_concepts || []
     };
 
-    // After successful generation, deduct stars and create record
+    // After successful generation, deduct stars based on number of images
     await StarsService.updateStars(params.telegramId, {
-      amount: -1,
+      amount: -requiredStars,
       type: 'GENERATION',
       metadata: {
         prompt: params.prompt,
-        seed: result.data.seed
+        seed: result.data.seed,
+        numImages: numImages
       }
     });
 
