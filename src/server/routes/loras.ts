@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
 import { validateTelegramWebAppData } from '../../lib/telegram.js';
+import { LoraStatus } from '@prisma/client';
 
 export async function loraRoutes(app: FastifyInstance) {
   // Get available (public) LoRAs
@@ -91,7 +92,12 @@ export async function loraRoutes(app: FastifyInstance) {
           training: {
             select: {
               steps: true,
-              metadata: true
+              metadata: true,
+              instancePrompt: true,
+              imageUrls: true,
+              startedAt: true,
+              completedAt: true,
+              status: true
             }
           }
         },
@@ -156,6 +162,7 @@ export async function loraRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: 'User not found' });
       }
 
+      // Find the lora and verify ownership
       const lora = await prisma.loraModel.findFirst({
         where: {
           databaseId: id,
@@ -181,6 +188,81 @@ export async function loraRoutes(app: FastifyInstance) {
     } catch (error) {
       logger.error({ error }, 'Failed to toggle LoRA public status');
       reply.status(500).send({ error: 'Failed to toggle LoRA public status' });
+    }
+  });
+
+  // Delete LoRA
+  app.delete('/loras/:id', {
+    schema: {
+      headers: {
+        type: 'object',
+        required: ['x-telegram-user-id'],
+        properties: {
+          'x-telegram-user-id': { type: 'string' }
+        }
+      },
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string' }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const telegramId = request.headers['x-telegram-user-id'] as string;
+
+      if (!telegramId) {
+        return reply.status(400).send({ error: 'Missing user ID' });
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { telegramId },
+        select: { databaseId: true }
+      });
+
+      if (!user) {
+        return reply.status(404).send({ error: 'User not found' });
+      }
+
+      // Find the lora and verify ownership
+      const lora = await prisma.loraModel.findFirst({
+        where: {
+          databaseId: id,
+          userDatabaseId: user.databaseId
+        }
+      });
+
+      if (!lora) {
+        return reply.status(404).send({ error: 'LoRA not found or not owned by user' });
+      }
+
+      // Check if lora is in training
+      if (lora.status === LoraStatus.TRAINING) {
+        return reply.status(400).send({ error: 'Cannot delete LoRA while it is training' });
+      }
+
+      // Delete the lora and its related training data in a transaction
+      await prisma.$transaction([
+        prisma.training.deleteMany({
+          where: { loraId: id }
+        }),
+        prisma.loraModel.delete({
+          where: { databaseId: id }
+        })
+      ]);
+
+      logger.info({
+        loraId: id,
+        userDatabaseId: user.databaseId
+      }, 'LoRA deleted successfully');
+
+      return reply.send({ message: 'LoRA deleted successfully' });
+    } catch (error) {
+      logger.error({ error }, 'Failed to delete LoRA');
+      reply.status(500).send({ error: 'Failed to delete LoRA' });
     }
   });
 
