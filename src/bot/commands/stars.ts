@@ -2,6 +2,7 @@ import { Composer } from 'grammy';
 import { BotContext } from '../../types/bot.js';
 import { getOrCreateUser } from '../../lib/user.js';
 import { logger } from '../../lib/logger.js';
+import { StarsService } from '../../services/stars.js';
 
 const composer = new Composer<BotContext>();
 
@@ -13,7 +14,7 @@ composer.command('stars', async (ctx) => {
   }
 
   try {
-    const user = await getOrCreateUser(telegramId, ctx.from?.username ?? undefined);
+    const balance = await StarsService.getBalance(telegramId);
 
     const inlineKeyboard = {
       inline_keyboard: [
@@ -40,8 +41,16 @@ composer.command('stars', async (ctx) => {
       ]
     };
 
+    const recentTransactions = balance.starTransactions
+      .map(t => `${t.type}: ${t.amount > 0 ? '+' : ''}${t.amount} ⭐`)
+      .join('\n');
+
     await ctx.reply(
-      `You have ${user.stars} ⭐\n\nEach image generation costs 1 ⭐\nBuy more stars:`,
+      `You have ${balance.stars} ⭐\n\n` +
+      `Total spent: ${balance.totalSpentStars} ⭐\n` +
+      `Total bought: ${balance.totalBoughtStars} ⭐\n\n` +
+      `Recent transactions:\n${recentTransactions}\n\n` +
+      `Each image generation costs 1 ⭐\nBuy more stars:`,
       { reply_markup: inlineKeyboard }
     );
   } catch (error) {

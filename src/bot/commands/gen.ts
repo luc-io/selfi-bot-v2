@@ -17,6 +17,12 @@ composer.command("gen", hasSubscription, async (ctx) => {
     return;
   }
 
+  // Ensure we have a valid user
+  if (!ctx.from?.id) {
+    await ctx.reply("Could not identify user");
+    return;
+  }
+
   const chatId = ctx.chat.id;
   const messageId = ctx.message.message_id;
   const now = Date.now();
@@ -64,7 +70,7 @@ composer.command("gen", hasSubscription, async (ctx) => {
     }, "Starting generation command");
 
     const user = await prisma.user.findUnique({
-      where: { telegramId: ctx.from?.id.toString() },
+      where: { telegramId: ctx.from.id.toString() },
       include: { parameters: true }
     });
 
@@ -91,6 +97,7 @@ composer.command("gen", hasSubscription, async (ctx) => {
     logger.info({ userParams, prompt }, "Starting generation with parameters");
 
     const response = await generateImage({
+      telegramId: ctx.from.id.toString(),
       prompt,
       imageSize: userParams?.image_size,
       numInferenceSteps: userParams?.num_inference_steps,
