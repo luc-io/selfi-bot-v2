@@ -17,7 +17,7 @@ interface TrainingStartRequest {
 
 // Max file size and count limits
 const MAX_FILE_SIZE = 25 * 1024 * 1024;  // 25MB per file for high-quality photos
-const MAX_TOTAL_SIZE = 300 * 1024 * 1024; // 200MB total to match nginx
+const MAX_TOTAL_SIZE = 300 * 1024 * 1024; // 300MB total to match nginx config
 const MAX_FILES = 20;  // Good number for training set
 
 // Services
@@ -56,27 +56,43 @@ export async function trainingRoutes(app: FastifyInstance) {
 
       // Handle multipart data
       try {
+        logger.debug('Starting file processing');
+
         for await (const part of parts) {
           if (part.type === 'file') {
             const file = part;
+            logger.debug({ filename: file.filename }, 'Processing file');
+
+            // Check file count before processing
+            if (files.length >= MAX_FILES) {
+              logger.warn({ 
+                currentCount: files.length, 
+                maxFiles: MAX_FILES,
+                filename: file.filename 
+              }, 'Maximum file count exceeded');
+              throw new Error(`Maximum number of files (${MAX_FILES}) exceeded`);
+            }
 
             // Check file size
             const buffer = await file.toBuffer();
             const fileSize = buffer.length;
 
+            logger.debug({ 
+              filename: file.filename,
+              size: fileSize,
+              maxSize: MAX_FILE_SIZE,
+              totalSize: totalSize + fileSize,
+              maxTotalSize: MAX_TOTAL_SIZE
+            }, 'File size check');
+
             if (fileSize > MAX_FILE_SIZE) {
-              throw new Error(`File ${file.filename} exceeds maximum size of 10MB`);
+              throw new Error(`File ${file.filename} exceeds maximum size of ${MAX_FILE_SIZE / (1024 * 1024)}MB`);
             }
 
             // Check total size
             totalSize += fileSize;
             if (totalSize > MAX_TOTAL_SIZE) {
-              throw new Error('Total upload size exceeds 50MB limit');
-            }
-
-            // Check file count
-            if (files.length + 1 > MAX_FILES) {
-              throw new Error(`Maximum number of files (${MAX_FILES}) exceeded`);
+              throw new Error(`Total upload size exceeds ${MAX_TOTAL_SIZE / (1024 * 1024)}MB limit`);
             }
 
             files.push({
@@ -84,6 +100,13 @@ export async function trainingRoutes(app: FastifyInstance) {
               filename: file.filename,
               contentType: file.mimetype
             });
+
+            logger.debug({ 
+              currentFiles: files.length,
+              filename: file.filename,
+              totalSize 
+            }, 'File added to processing queue');
+
           } else {
             // For non-file parts
             if (part.fieldname === 'params') {
@@ -101,6 +124,13 @@ export async function trainingRoutes(app: FastifyInstance) {
             }
           }
         }
+
+        logger.info({ 
+          totalFiles: files.length,
+          totalSize: totalSize / (1024 * 1024) + 'MB',
+          hasParams: !!params 
+        }, 'File processing completed');
+
       } catch (error) {
         logger.error({ error }, 'File processing error');
         const errorMessage = error instanceof Error ? error.message : 'File processing error';
