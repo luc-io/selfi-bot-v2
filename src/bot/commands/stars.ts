@@ -6,6 +6,15 @@ import { StarsService } from '../../services/stars.js';
 
 const composer = new Composer<BotContext>();
 
+const starPacks = [
+  [20, 20],   // 20 stars for 20 XTR
+  [50, 50],   // 50 stars for 50 XTR
+  [100, 100], // 100 stars for 100 XTR
+  [250, 250], // 250 stars for 250 XTR
+  [500, 500], // 500 stars for 500 XTR
+  [1000, 1000] // 1000 stars for 1000 XTR
+] as const;
+
 composer.command('stars', async (ctx) => {
   const telegramId = ctx.from?.id.toString();
   if (!telegramId || !ctx.from) {
@@ -16,29 +25,14 @@ composer.command('stars', async (ctx) => {
   try {
     const balance = await StarsService.getBalance(telegramId);
 
+    // Create keyboard with star packs
     const inlineKeyboard = {
-      inline_keyboard: [
-        [
-          { 
-            text: '5 ⭐ - 5 XTR',
-            callback_data: 'buy_stars:5'
-          },
-          {
-            text: '20 ⭐ - 20 XTR',
-            callback_data: 'buy_stars:20'
-          }
-        ],
-        [
-          {
-            text: '50 ⭐ - 50 XTR',
-            callback_data: 'buy_stars:50'
-          },
-          {
-            text: '100 ⭐ - 100 XTR',
-            callback_data: 'buy_stars:100'
-          }
-        ]
-      ]
+      inline_keyboard: starPacks.map(([stars, price]) => ([
+        { 
+          text: `${stars} ⭐ - ${price} XTR`,
+          callback_data: `buy_stars:${stars}`
+        }
+      ]))
     };
 
     const recentTransactions = balance.starTransactions
@@ -50,7 +44,7 @@ composer.command('stars', async (ctx) => {
       `Total spent: ${balance.totalSpentStars} ⭐\n` +
       `Total bought: ${balance.totalBoughtStars} ⭐\n\n` +
       `Recent transactions:\n${recentTransactions}\n\n` +
-      `Each image generation costs 1 ⭐\nBuy more stars:`,
+      `Each image generation costs 1 ⭐\nEach training costs 150 ⭐\n\nBuy more stars:`,
       { reply_markup: inlineKeyboard }
     );
   } catch (error) {
@@ -65,29 +59,24 @@ composer.callbackQuery(/^buy_stars:(\d+)$/, async (ctx) => {
   if (!match) return;
 
   const stars = parseInt(match[1], 10);
-  const prices = {
-    5: 5,     // 5 XTR
-    20: 20,   // 20 XTR
-    50: 50,   // 50 XTR
-    100: 100  // 100 XTR
-  };
+  const price = starPacks.find(([s]) => s === stars)?.[1];
 
-  const price = prices[stars as keyof typeof prices];
-  if (!price) return;
+  if (!price) {
+    await ctx.answerCallbackQuery({ text: 'Invalid star pack selected' });
+    return;
+  }
 
   try {
-    const prices = [{
-      label: `${stars} Stars`,
-      amount: price
-    }];
-
     await ctx.answerCallbackQuery();
     await ctx.replyWithInvoice(
       `${stars} Selfi Stars`, // title
-      `Purchase ${stars} stars for image generation`, // description
+      `Purchase ${stars} stars for image generation and training`, // description
       `stars_${stars}`, // payload
       'XTR', // currency
-      prices // prices
+      [{
+        label: `${stars} Stars`,
+        amount: price
+      }] // prices
     );
     
     logger.info({ 
