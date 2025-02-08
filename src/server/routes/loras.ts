@@ -93,10 +93,11 @@ export async function loraRoutes(app: FastifyInstance) {
             select: {
               steps: true,
               metadata: true,
-              is_style: true,
-              create_masks: true,
-              trigger_word: true,
-              imageUrls: true
+              instancePrompt: true,
+              imageUrls: true,
+              startedAt: true,
+              completedAt: true,
+              status: true
             }
           }
         },
