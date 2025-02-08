@@ -1,5 +1,7 @@
 import { fal } from "@fal-ai/client";
 import { logger } from '../lib/logger.js';
+import { StarsService } from './stars.js';
+import { prisma } from '../lib/prisma.js';
 
 interface FalFile {
   url: string;
@@ -36,6 +38,7 @@ interface FalQueueResultResponse {
 }
 
 export interface TrainModelParams {
+  telegramId: string;
   images_data_url: string;
   trigger_word: string;
   steps: number;
@@ -73,6 +76,7 @@ const credentials = process.env.FAL_KEY;
 
 export class TrainingService {
   private readonly activeTrainings = new Map<string, TrainingProgress>();
+  private readonly TRAINING_COST = 150; // Training cost in stars
 
   constructor() {
     fal.config({
@@ -206,6 +210,14 @@ export class TrainingService {
     try {
       logger.info({ params, isTest }, 'Starting model training');
 
+      // Check if user has enough stars for training
+      if (!isTest) {
+        const hasEnoughStars = await StarsService.checkBalance(params.telegramId, this.TRAINING_COST);
+        if (!hasEnoughStars) {
+          throw new Error(`Insufficient stars. Required: ${this.TRAINING_COST} stars for training`);
+        }
+      }
+
       // Return mock result if in test mode
       if (isTest) {
         logger.info('Test mode: Returning mock training result');
@@ -248,10 +260,32 @@ export class TrainingService {
         config: this.convertFileToJson(result.data.config_file)
       };
 
+      // After successful training, deduct stars
+      await StarsService.updateStars(params.telegramId, {
+        amount: -this.TRAINING_COST,
+        type: 'TRAINING',
+        metadata: {
+          trigger_word: params.trigger_word,
+          steps: params.steps,
+          is_style: params.is_style
+        }
+      });
+
+      // Update training record with stars spent
+      await prisma.training.update({
+        where: {
+          id: result.requestId
+        },
+        data: {
+          starsSpent: this.TRAINING_COST
+        }
+      });
+
       logger.info({ 
         weightsUrl: trainingResult.weights.url,
         configUrl: trainingResult.config.url,
-        requestId: result.requestId
+        requestId: result.requestId,
+        starsSpent: this.TRAINING_COST
       }, 'Training completed');
 
       return trainingResult;
