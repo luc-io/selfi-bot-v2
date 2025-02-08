@@ -21,15 +21,17 @@ export async function setupServer(server: FastifyInstance, bot: Bot<BotContext>)
     allowedHeaders: ['Content-Type', 'x-telegram-init-data', 'x-telegram-user-id']
   });
 
-  // Register multipart plugin
+  // Register multipart plugin with increased limits
   await server.register(multipart, {
     limits: {
       fieldNameSize: 100, // Max field name size in bytes
-      fieldSize: 1000000, // Max field value size in bytes
+      fieldSize: 1000000, // Max field value size in bytes (1MB)
       fields: 10, // Max number of non-file fields
-      fileSize: 10000000, // For multipart forms, the max file size in bytes
-      files: 1, // Max number of file fields
-      headerPairs: 2000 // Max number of header key=>value pairs
+      fileSize: 25 * 1024 * 1024, // 25MB per file to match route limit
+      files: 20, // Max number of files to match route limit
+      headerPairs: 2000, // Max number of header key=>value pairs
+      totalFields: 30, // Total fields including files (20 files + 10 fields)
+      totalFieldsSize: 300 * 1024 * 1024 // 300MB total to match nginx
     }
   });
 
