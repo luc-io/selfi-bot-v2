@@ -89,16 +89,25 @@ export class TrainingService {
     };
   }
 
+  private generateTestId(): string {
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 8);
+    return `${timestamp}_${random}`;
+  }
+
   private getMockResult(trigger_word: string): TrainingResult {
+    const testId = this.generateTestId();
+    const baseUrl = `https://test-url/TEST_${testId}`;
+
     return {
       weights: {
-        url: `https://test-url/${trigger_word}_weights.safetensors`,
+        url: `${baseUrl}_${trigger_word}_weights.safetensors`,
         fileName: `${trigger_word}_weights.safetensors`,
         fileSize: 1000000,
         contentType: "application/octet-stream"
       },
       config: {
-        url: `https://test-url/${trigger_word}_config.json`,
+        url: `${baseUrl}_${trigger_word}_config.json`,
         fileName: `${trigger_word}_config.json`,
         fileSize: 1000,
         contentType: "application/json"
@@ -127,7 +136,7 @@ export class TrainingService {
         .find((msg) => msg?.includes('progress'));
 
       if (progressLog) {
-        const match = progressLog.match(/(\d+)%/);
+        const match = progressLog.match(/(\\d+)%/);
         if (match) {
           progress = parseInt(match[1]);
         }
