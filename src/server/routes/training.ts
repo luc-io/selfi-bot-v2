@@ -16,9 +16,9 @@ interface TrainingStartRequest {
 }
 
 // Max file size and count limits
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file
-const MAX_TOTAL_SIZE = 50 * 1024 * 1024; // 50MB total
-const MAX_FILES = 20;
+const MAX_FILE_SIZE = 25 * 1024 * 1024;  // 25MB per file for high-quality photos
+const MAX_TOTAL_SIZE = 300 * 1024 * 1024; // 200MB total to match nginx
+const MAX_FILES = 20;  // Good number for training set
 
 // Services
 const trainingService = new TrainingService();
@@ -75,8 +75,8 @@ export async function trainingRoutes(app: FastifyInstance) {
             }
 
             // Check file count
-            if (files.length >= MAX_FILES) {
-              throw new Error('Maximum number of files (20) exceeded');
+            if (files.length + 1 > MAX_FILES) {
+              throw new Error(`Maximum number of files (${MAX_FILES}) exceeded`);
             }
 
             files.push({
