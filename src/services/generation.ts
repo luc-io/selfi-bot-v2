@@ -3,6 +3,7 @@ import { fal } from '@fal-ai/client';
 import type { GenerateImageParams, GenerationResponse } from '../types/generation';
 import { logger } from '../lib/logger.js';
 import { prisma } from '../lib/prisma.js';
+import { StarsService } from './stars.js';
 
 interface FalRequestParams {
   input: {
@@ -32,8 +33,14 @@ fal.config({
   credentials
 });
 
-export async function generateImage(params: GenerateImageParams): Promise<GenerationResponse> {
+export async function generateImage(params: GenerateImageParams & { telegramId: string }): Promise<GenerationResponse> {
   logger.info({ params }, 'Starting image generation with params');
+
+  // Check if user has enough stars
+  const hasEnoughStars = await StarsService.checkBalance(params.telegramId, 1);
+  if (!hasEnoughStars) {
+    throw new Error('Insufficient stars');
+  }
   
   const requestParams: FalRequestParams = {
     input: {
@@ -80,20 +87,35 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
 
   logger.info({ requestParams }, 'Sending request to FAL');
 
-  const result = await fal.run('fal-ai/flux-lora', requestParams);
-  logger.info({ result }, 'Received FAL response');
+  try {
+    const result = await fal.run('fal-ai/flux-lora', requestParams);
+    logger.info({ result }, 'Received FAL response');
 
-  const images = Array.isArray(result.data.images) ? result.data.images : [result.data.images];
-  
-  const generationResponse = {
-    images: images.map((img: FalImage) => ({
-      url: img.url,
-      contentType: `image/${params.outputFormat ?? 'jpeg'}`
-    })),
-    seed: result.data.seed,
-    hasNsfwConcepts: result.data.has_nsfw_concepts || []
-  };
+    const images = Array.isArray(result.data.images) ? result.data.images : [result.data.images];
+    
+    const generationResponse = {
+      images: images.map((img: FalImage) => ({
+        url: img.url,
+        contentType: `image/${params.outputFormat ?? 'jpeg'}`
+      })),
+      seed: result.data.seed,
+      hasNsfwConcepts: result.data.has_nsfw_concepts || []
+    };
 
-  logger.info({ generationResponse }, 'Generation completed successfully');
-  return generationResponse;
+    // After successful generation, deduct stars and create record
+    await StarsService.updateStars(params.telegramId, {
+      amount: -1,
+      type: 'GENERATION',
+      metadata: {
+        prompt: params.prompt,
+        seed: result.data.seed
+      }
+    });
+
+    logger.info({ generationResponse }, 'Generation completed successfully');
+    return generationResponse;
+  } catch (error) {
+    logger.error({ error, params }, 'Generation failed');
+    throw error;
+  }
 }
