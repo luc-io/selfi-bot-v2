@@ -2,6 +2,7 @@ module.exports = {
   apps: [{
     name: 'selfi-bot',
     script: 'dist/index.js',
+    exec_mode: 'fork',  // Explicitly set to fork mode
     instances: 1,
     autorestart: true,
     watch: false,
