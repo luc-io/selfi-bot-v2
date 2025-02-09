@@ -2,7 +2,7 @@ import { Context, NarrowedContext } from 'telegraf';
 import { Message, Update } from 'telegraf/types';
 import { prisma } from '../../db';
 import { config } from '../../config';
-import { PrismaClient, TransactionType } from '@prisma/client';
+import { Prisma, TransactionType } from '@prisma/client';
 
 type MessageContext = NarrowedContext<Context<Update>, Update.MessageUpdate>;
 
@@ -44,7 +44,7 @@ export async function grantCommand(ctx: MessageContext) {
     }
 
     // Create transaction and update user stars in a transaction
-    await prisma.$transaction(async (tx: PrismaClient) => {
+    await prisma.$transaction(async (tx) => {
       // Create star transaction
       await tx.starTransaction.create({
         data: {
