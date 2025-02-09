@@ -12,7 +12,6 @@ interface Config {
 
   // Telegram Bot
   TELEGRAM_BOT_TOKEN: string;
-  BOT_TOKEN: string;
   WEBHOOK_DOMAIN: string;
   WEBHOOK_PATH: string;
   MINIAPP_URL: string;
@@ -48,8 +47,7 @@ export const config: Config = {
   PORT: process.env.PORT || '3000',
 
   // Telegram Bot
-  TELEGRAM_BOT_TOKEN: process.env.BOT_TOKEN!,
-  BOT_TOKEN: process.env.BOT_TOKEN!,
+  TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN!,
   WEBHOOK_DOMAIN: process.env.WEBHOOK_DOMAIN!,
   WEBHOOK_PATH: '/bot',
   MINIAPP_URL: process.env.MINIAPP_URL!,
@@ -58,7 +56,7 @@ export const config: Config = {
   DATABASE_URL: process.env.DATABASE_URL!,
 
   // File storage
-  TELEGRAM_FILE_API_URL: 'https://api.telegram.org/file/bot' + process.env.BOT_TOKEN,
+  TELEGRAM_FILE_API_URL: 'https://api.telegram.org/file/bot' + process.env.TELEGRAM_BOT_TOKEN,
   UPLOAD_DIR: process.env.UPLOAD_DIR || './uploads',
   PUBLIC_URL: process.env.PUBLIC_URL!,
 
@@ -81,7 +79,6 @@ export const {
   isDev,
   PORT,
   TELEGRAM_BOT_TOKEN,
-  BOT_TOKEN,
   WEBHOOK_DOMAIN,
   WEBHOOK_PATH,
   MINIAPP_URL,
