@@ -1,7 +1,7 @@
 import { prisma } from './prisma.js';
 import { logger } from './logger.js';
 import { config } from '../config.js';
-import { bot } from '../bot/bot.js';
+import { Bot } from 'grammy';
 
 export async function getOrCreateUser(telegramId: string, username?: string) {
   try {
@@ -36,8 +36,9 @@ export async function getOrCreateUser(telegramId: string, username?: string) {
 
       // Send notification to admin
       try {
+        const tempBot = new Bot(config.TELEGRAM_BOT_TOKEN);
         const userInfo = username ? `@${username}` : `User`;
-        await bot.api.sendMessage(
+        await tempBot.api.sendMessage(
           config.adminUserId,
           `🆕 New User Registered!\n\nID: ${telegramId}\nUsername: ${userInfo}`
         );
