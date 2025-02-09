@@ -7,12 +7,6 @@ export async function notifyAdmin(
   api: Api<RawApi>,
   message: string
 ): Promise<void> {
-  // Skip notification if no admin ID is configured
-  if (!config.ADMIN_TELEGRAM_ID) {
-    logger.info('No admin Telegram ID configured, skipping notification');
-    return;
-  }
-
   try {
     await api.sendMessage(config.ADMIN_TELEGRAM_ID, message);
     logger.info({ message }, 'Admin notification sent');
@@ -24,8 +18,20 @@ export async function notifyAdmin(
 export async function notifyNewUser(
   api: Api<RawApi>,
   telegramId: string,
-  username?: string
+  userInfo: {
+    username?: string;
+    firstName?: string;
+    lastName?: string;
+  }
 ): Promise<void> {
-  const message = `🆕 New user started the bot!\n\nTelegram ID: ${telegramId}\nUsername: ${username ? '@' + username : 'Not provided'}`;
+  const fullName = [userInfo.firstName, userInfo.lastName]
+    .filter(Boolean)
+    .join(' ');
+  
+  const message = `🆕 New user started the bot!\n\n` +
+    `Telegram ID: ${telegramId}\n` +
+    `${fullName ? `Name: ${fullName}\n` : ''}` +
+    `Username: ${userInfo.username ? '@' + userInfo.username : 'Not provided'}`;
+    
   await notifyAdmin(api, message);
 }
