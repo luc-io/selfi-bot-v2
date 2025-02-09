@@ -18,7 +18,8 @@ export async function loraRoutes(app: FastifyInstance) {
               name: { type: 'string' },
               triggerWord: { type: 'string' },
               status: { type: 'string' },
-              isPublic: { type: 'boolean' }
+              isPublic: { type: 'boolean' },
+              isSelected: { type: 'boolean' }
             }
           }
         }
@@ -37,7 +38,8 @@ export async function loraRoutes(app: FastifyInstance) {
           triggerWord: true,
           weightsUrl: true,
           status: true,
-          isPublic: true
+          isPublic: true,
+          isSelected: true
         },
         orderBy: {
           name: 'asc'
@@ -118,7 +120,97 @@ export async function loraRoutes(app: FastifyInstance) {
     }
   });
 
-  // Toggle LoRA public status
+  // Toggle LoRA selection status
+  app.post('/loras/:id/toggle-selection', {
+    schema: {
+      headers: {
+        type: 'object',
+        required: ['x-telegram-user-id'],
+        properties: {
+          'x-telegram-user-id': { type: 'string' }
+        }
+      },
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string' }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['isSelected'],
+        properties: {
+          isSelected: { type: 'boolean' }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const { isSelected } = request.body as { isSelected: boolean };
+      const telegramId = request.headers['x-telegram-user-id'] as string;
+
+      if (!telegramId) {
+        return reply.status(400).send({ error: 'Missing user ID' });
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { telegramId },
+        select: { databaseId: true }
+      });
+
+      if (!user) {
+        return reply.status(404).send({ error: 'User not found' });
+      }
+
+      // Find the lora and verify ownership
+      const lora = await prisma.loraModel.findFirst({
+        where: {
+          databaseId: id,
+          OR: [
+            { userDatabaseId: user.databaseId },
+            { isPublic: true }
+          ]
+        }
+      });
+
+      if (!lora) {
+        return reply.status(404).send({ error: 'LoRA not found or not accessible' });
+      }
+
+      // If selecting, check if user already has 5 selected loras
+      if (isSelected) {
+        const selectedCount = await prisma.loraModel.count({
+          where: {
+            userDatabaseId: user.databaseId,
+            isSelected: true
+          }
+        });
+
+        if (selectedCount >= 5) {
+          return reply.status(400).send({ error: 'Maximum number of selected LoRAs reached (5)' });
+        }
+      }
+
+      const updatedLora = await prisma.loraModel.update({
+        where: { databaseId: id },
+        data: { isSelected }
+      });
+
+      logger.info({
+        loraId: id,
+        isSelected
+      }, 'LoRA selection status updated');
+
+      return updatedLora;
+    } catch (error) {
+      logger.error({ error }, 'Failed to toggle LoRA selection status');
+      reply.status(500).send({ error: 'Failed to toggle LoRA selection status' });
+    }
+  });
+
+  // Toggle LoRA public status (kept for backward compatibility)
   app.post('/loras/:id/toggle-public', {
     schema: {
       headers: {
