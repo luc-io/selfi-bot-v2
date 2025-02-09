@@ -1,86 +1,33 @@
-import { z } from 'zod';
-import { logger } from './lib/logger.js';
 import * as dotenv from 'dotenv';
-
-// Load .env file
 dotenv.config();
 
-const configSchema = z.object({
-  // Server
-  PORT: z.string().default('3000'),
-  NODE_ENV: z.enum(['development', 'production']).default('development'),
-  PUBLIC_URL: z.string().optional(), // Made optional
-  MINIAPP_URL: z.string(),
+// Admin configuration
+export const ADMIN_TELEGRAM_ID = process.env.ADMIN_TELEGRAM_ID 
+  ? parseInt(process.env.ADMIN_TELEGRAM_ID)
+  : null;
 
-  // Telegram
-  TELEGRAM_BOT_TOKEN: z.string(),
-  TELEGRAM_PAYMENT_TOKEN: z.string().optional(),
-  ADMIN_TELEGRAM_ID: z
-    .string()
-    .min(1)
-    .transform((val) => {
-      if (!val) {
-        logger.warn('ADMIN_TELEGRAM_ID is empty');
-        return undefined;
-      }
-      logger.info({ adminId: val }, 'ADMIN_TELEGRAM_ID loaded');
-      return val;
-    })
-    .optional(),
+export const isDev = process.env.NODE_ENV === 'development';
 
-  // FAL AI
-  FAL_KEY: z.string(),
-  FAL_KEY_SECRET: z.string().optional(), // Made optional as it might be combined with FAL_KEY
+// Telegram Bot
+export const BOT_TOKEN = process.env.BOT_TOKEN!;
+export const WEBHOOK_DOMAIN = process.env.WEBHOOK_DOMAIN!;
+export const WEBHOOK_PATH = '/bot';
 
-  // Database
-  DATABASE_URL: z.string(),
+// Database
+export const DATABASE_URL = process.env.DATABASE_URL!;
 
-  // Digital Ocean Spaces
-  SPACES_KEY: z.string(),
-  SPACES_SECRET: z.string(),
-  SPACES_BUCKET: z.string(),
-  SPACES_ENDPOINT: z.string(),
+// File storage
+export const TELEGRAM_FILE_API_URL = 'https://api.telegram.org/file/bot' + BOT_TOKEN;
+export const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
+export const PUBLIC_URL = process.env.PUBLIC_URL!;
 
-  // Derived settings
-  ALLOWED_ORIGINS: z.array(z.string()).default(['http://localhost:5173'])
-});
+// Redis
+export const REDIS_URL = process.env.REDIS_URL!;
 
-const envConfig = {
-  // Server
-  PORT: process.env.PORT,
-  NODE_ENV: process.env.NODE_ENV,
-  PUBLIC_URL: process.env.PUBLIC_URL,
-  MINIAPP_URL: process.env.MINIAPP_URL,
+// Model paths
+export const DEFAULT_BASE_MODEL_PATH = process.env.DEFAULT_BASE_MODEL_PATH!;
+export const LORA_BASE_PATH = process.env.LORA_BASE_PATH!;
 
-  // Telegram
-  TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
-  TELEGRAM_PAYMENT_TOKEN: process.env.TELEGRAM_PAYMENT_TOKEN,
-  ADMIN_TELEGRAM_ID: process.env.ADMIN_TELEGRAM_ID,
-
-  // FAL AI
-  FAL_KEY: process.env.FAL_KEY,
-  FAL_KEY_SECRET: process.env.FAL_KEY_SECRET,
-
-  // Database
-  DATABASE_URL: process.env.DATABASE_URL,
-
-  // Digital Ocean Spaces
-  SPACES_KEY: process.env.SPACES_KEY,
-  SPACES_SECRET: process.env.SPACES_SECRET,
-  SPACES_BUCKET: process.env.SPACES_BUCKET,
-  SPACES_ENDPOINT: process.env.SPACES_ENDPOINT,
-
-  // Derived settings
-  ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS?.split(',') || undefined,
-};
-
-// Log the raw env variables before parsing
-logger.info({
-  env: {
-    ADMIN_TELEGRAM_ID: process.env.ADMIN_TELEGRAM_ID,
-    NODE_ENV: process.env.NODE_ENV
-  }
-}, 'Raw environment variables');
-
-// Validate and export config
-export const config = configSchema.parse(envConfig);
+// Stability settings
+export const TRAINING_TIMEOUT = 1000 * 60 * 30; // 30 minutes
+export const GENERATION_TIMEOUT = 1000 * 60 * 5; // 5 minutes
