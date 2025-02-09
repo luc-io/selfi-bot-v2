@@ -7,10 +7,15 @@ interface Config {
   NODE_ENV: string;
   isDev: boolean;
 
+  // Server
+  PORT: string;
+
   // Telegram Bot
+  TELEGRAM_BOT_TOKEN: string;
   BOT_TOKEN: string;
   WEBHOOK_DOMAIN: string;
   WEBHOOK_PATH: string;
+  MINIAPP_URL: string;
 
   // Database
   DATABASE_URL: string;
@@ -39,10 +44,15 @@ export const config: Config = {
   NODE_ENV: process.env.NODE_ENV || 'development',
   isDev: process.env.NODE_ENV === 'development',
 
+  // Server
+  PORT: process.env.PORT || '3000',
+
   // Telegram Bot
+  TELEGRAM_BOT_TOKEN: process.env.BOT_TOKEN!,
   BOT_TOKEN: process.env.BOT_TOKEN!,
   WEBHOOK_DOMAIN: process.env.WEBHOOK_DOMAIN!,
   WEBHOOK_PATH: '/bot',
+  MINIAPP_URL: process.env.MINIAPP_URL!,
 
   // Database
   DATABASE_URL: process.env.DATABASE_URL!,
@@ -69,9 +79,12 @@ export const {
   ADMIN_TELEGRAM_ID,
   NODE_ENV,
   isDev,
+  PORT,
+  TELEGRAM_BOT_TOKEN,
   BOT_TOKEN,
   WEBHOOK_DOMAIN,
   WEBHOOK_PATH,
+  MINIAPP_URL,
   DATABASE_URL,
   TELEGRAM_FILE_API_URL,
   UPLOAD_DIR,
