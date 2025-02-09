@@ -8,6 +8,21 @@ import { logger } from './lib/logger.js';
 import { autoRetry } from '@grammyjs/auto-retry';
 import { parseMode } from '@grammyjs/parse-mode';
 
+// Add debug logging for environment variables
+logger.info({
+  env: {
+    ADMIN_TELEGRAM_ID: process.env.ADMIN_TELEGRAM_ID,
+    NODE_ENV: process.env.NODE_ENV
+  }
+}, 'Environment variables at startup');
+
+logger.info({
+  config: {
+    ADMIN_TELEGRAM_ID: config.ADMIN_TELEGRAM_ID,
+    NODE_ENV: config.NODE_ENV
+  }
+}, 'Loaded configuration');
+
 async function setupWebhook(bot: Bot<BotContext>): Promise<boolean> {
   try {
     // First, delete any existing webhook
