@@ -35,7 +35,10 @@ async function setupWebhook(bot: Bot<BotContext>): Promise<boolean> {
       { command: 'gen', description: 'Generate a new image with AI' },
       { command: 'stars', description: 'Buy stars (currency for generations)' },
       { command: 'balance', description: 'Check your stars balance' },
-      { command: 'help', description: 'Show all available commands' }
+      { command: 'help', description: 'Show all available commands' },
+      ...(config.ADMIN_TELEGRAM_ID ? [
+        { command: 'grant', description: 'Grant stars to users (Admin only)' }
+      ] : [])
     ]);
     logger.info('Bot commands registered with Telegram');
 
