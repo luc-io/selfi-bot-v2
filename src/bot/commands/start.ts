@@ -11,9 +11,11 @@ composer.command('start', async (ctx) => {
   logger.info({
     config: {
       adminId: config.ADMIN_TELEGRAM_ID,
-      nodeEnv: config.NODE_ENV
-    }
-  }, 'Start command received with config');
+      nodeEnv: config.NODE_ENV,
+      publicUrl: config.PUBLIC_URL
+    },
+    from: ctx.from
+  }, 'Start command received with full config');
   
   if (!ctx.from) {
     logger.warn('No from field in context');
@@ -26,12 +28,23 @@ composer.command('start', async (ctx) => {
     logger.info({ telegramId, username: ctx.from.username }, 'Getting or creating user');
     
     const user = await getOrCreateUser(telegramId, ctx.from.username ?? undefined);
-    logger.info({ telegramId, stars: user.stars }, 'User retrieved/created');
+    logger.info({ 
+      telegramId, 
+      stars: user.stars,
+      isNewUser: user.createdAt.getTime() === user.updatedAt.getTime(),
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
+    }, 'User retrieved/created');
     
     // If this is a new user, notify admin
     if (user.createdAt.getTime() === user.updatedAt.getTime()) {
-      logger.info({ telegramId, adminId: config.ADMIN_TELEGRAM_ID }, 'Attempting to notify admin about new user');
+      logger.info({ 
+        telegramId, 
+        adminId: config.ADMIN_TELEGRAM_ID,
+        botInfo: ctx.me
+      }, 'Attempting to notify admin about new user');
       await notifyNewUser(ctx.api, telegramId, ctx.from.username ?? undefined);
+      logger.info('Admin notification sent successfully');
     }
     
     const username = ctx.from.username ? `@${ctx.from.username}` : 'there';
