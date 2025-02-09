@@ -42,7 +42,14 @@ async function setupWebhook(bot: Bot<BotContext>): Promise<boolean> {
 
     return webhookResponse;
   } catch (error) {
-    logger.error({ error }, 'Failed to setup webhook');
+    const err = error as Error;
+    logger.error({ 
+      error: {
+        message: err.message,
+        stack: err.stack,
+        name: err.name
+      }
+    }, 'Failed to setup webhook');
     return false;
   }
 }
@@ -52,6 +59,10 @@ async function main() {
     // Initialize bot with error handling
     let bot: Bot<BotContext>;
     try {
+      if (!config.TELEGRAM_BOT_TOKEN) {
+        throw new Error('BOT_TOKEN environment variable is not set');
+      }
+      
       bot = new Bot<BotContext>(config.TELEGRAM_BOT_TOKEN);
       await bot.init();
       logger.info('Bot instance created and initialized');
@@ -65,7 +76,14 @@ async function main() {
       bot.use(commands);
       logger.info('Bot commands registered');
     } catch (error) {
-      logger.error({ error }, 'Failed to initialize bot');
+      const err = error as Error;
+      logger.error({ 
+        error: {
+          message: err.message,
+          stack: err.stack,
+          name: err.name
+        }
+      }, 'Failed to initialize bot');
       throw error;
     }
 
@@ -100,14 +118,26 @@ async function main() {
 
     // Error handling for bot
     bot.catch((err) => {
+      const error = err as Error;
       logger.error({
-        error: err,
+        error: {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        },
         msg: 'Bot error occurred'
       });
     });
 
   } catch (error) {
-    logger.error({ error }, 'Failed to start bot');
+    const err = error as Error;
+    logger.error({ 
+      error: {
+        message: err.message,
+        stack: err.stack,
+        name: err.name
+      }
+    }, 'Failed to start bot');
     process.exit(1);
   }
 }
@@ -116,6 +146,10 @@ async function main() {
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down');
   try {
+    if (!config.TELEGRAM_BOT_TOKEN) {
+      throw new Error('BOT_TOKEN environment variable is not set');
+    }
+    
     const bot = new Bot<BotContext>(config.TELEGRAM_BOT_TOKEN);
     await bot.api.deleteWebhook();
     logger.info('Webhook deleted');
@@ -126,7 +160,14 @@ process.on('SIGTERM', async () => {
 
     process.exit(0);
   } catch (error) {
-    logger.error('Error during shutdown:', error);
+    const err = error as Error;
+    logger.error({ 
+      error: {
+        message: err.message,
+        stack: err.stack,
+        name: err.name
+      }
+    }, 'Error during shutdown');
     process.exit(1);
   }
 });
@@ -139,6 +180,13 @@ process.on('SIGINT', () => {
 
 // Start the bot
 main().catch((error) => {
-  logger.error('Failed to start bot:', error);
+  const err = error as Error;
+  logger.error({ 
+    error: {
+      message: err.message,
+      stack: err.stack,
+      name: err.name
+    }
+  }, 'Failed to start bot');
   process.exit(1);
 });
