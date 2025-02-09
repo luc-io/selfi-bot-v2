@@ -13,7 +13,16 @@ const lastProcessed = new Map<number, { msgId: number; timestamp: number }>();
 
 composer.command("gen", hasSubscription, async (ctx) => {
   // Ensure this is a text message with the command
-  if (!ctx.message?.text || !ctx.message.text.startsWith("/gen")) {
+  if (!ctx.message?.text) {
+    return;
+  }
+
+  // Extract prompt - everything after /gen
+  const prompt = ctx.message.text.split(/\/gen\s*/)[1]?.trim();
+  
+  // Check for empty or missing prompt
+  if (!prompt) {
+    await ctx.reply("❌ Please provide a prompt after the /gen command.\nExample: /gen a beautiful sunset");
     return;
   }
 
@@ -83,12 +92,6 @@ composer.command("gen", hasSubscription, async (ctx) => {
       output_format?: string;
       loras?: { path: string; scale: number }[];
     } | null;
-
-    const prompt = ctx.message.text.replace(/^\/gen\s+/, "").trim();
-    if (!prompt) {
-      await ctx.reply("Please provide a prompt after the /gen command.");
-      return;
-    }
 
     // Send a "processing" message
     const processingMsg = await ctx.reply("🎨 Generating your art...");
