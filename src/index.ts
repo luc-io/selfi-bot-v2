@@ -71,7 +71,8 @@ async function main() {
     let bot: Bot<BotContext>;
     try {
       bot = new Bot<BotContext>(config.TELEGRAM_BOT_TOKEN);
-      logger.info('Bot instance created');
+      await bot.init();
+      logger.info('Bot instance created and initialized');
 
       // Add middleware
       bot.api.config.use(autoRetry());
