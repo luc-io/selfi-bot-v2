@@ -1,86 +1,94 @@
-import { z } from 'zod';
-import { logger } from './lib/logger.js';
 import * as dotenv from 'dotenv';
-
-// Load .env file
 dotenv.config();
 
-const configSchema = z.object({
+interface Config {
+  // Admin configuration
+  ADMIN_TELEGRAM_ID: number | null;
+  NODE_ENV: string;
+  isDev: boolean;
+
   // Server
-  PORT: z.string().default('3000'),
-  NODE_ENV: z.enum(['development', 'production']).default('development'),
-  PUBLIC_URL: z.string().optional(), // Made optional
-  MINIAPP_URL: z.string(),
+  PORT: string;
 
-  // Telegram
-  TELEGRAM_BOT_TOKEN: z.string(),
-  TELEGRAM_PAYMENT_TOKEN: z.string().optional(),
-  ADMIN_TELEGRAM_ID: z
-    .string()
-    .min(1)
-    .transform((val) => {
-      if (!val) {
-        logger.warn('ADMIN_TELEGRAM_ID is empty');
-        return undefined;
-      }
-      logger.info({ adminId: val }, 'ADMIN_TELEGRAM_ID loaded');
-      return val;
-    })
-    .optional(),
-
-  // FAL AI
-  FAL_KEY: z.string(),
-  FAL_KEY_SECRET: z.string().optional(), // Made optional as it might be combined with FAL_KEY
+  // Telegram Bot
+  TELEGRAM_BOT_TOKEN: string;
+  WEBHOOK_DOMAIN: string;
+  WEBHOOK_PATH: string;
+  MINIAPP_URL: string;
 
   // Database
-  DATABASE_URL: z.string(),
+  DATABASE_URL: string;
 
-  // Digital Ocean Spaces
-  SPACES_KEY: z.string(),
-  SPACES_SECRET: z.string(),
-  SPACES_BUCKET: z.string(),
-  SPACES_ENDPOINT: z.string(),
+  // File storage
+  TELEGRAM_FILE_API_URL: string;
+  UPLOAD_DIR: string;
+  PUBLIC_URL: string;
 
-  // Derived settings
-  ALLOWED_ORIGINS: z.array(z.string()).default(['http://localhost:5173'])
-});
+  // Redis
+  REDIS_URL: string;
 
-const envConfig = {
+  // Model paths
+  DEFAULT_BASE_MODEL_PATH: string;
+  LORA_BASE_PATH: string;
+
+  // Stability settings
+  TRAINING_TIMEOUT: number;
+  GENERATION_TIMEOUT: number;
+}
+
+export const config: Config = {
+  ADMIN_TELEGRAM_ID: process.env.ADMIN_TELEGRAM_ID 
+    ? parseInt(process.env.ADMIN_TELEGRAM_ID)
+    : null,
+  NODE_ENV: process.env.NODE_ENV || 'development',
+  isDev: process.env.NODE_ENV === 'development',
+
   // Server
-  PORT: process.env.PORT,
-  NODE_ENV: process.env.NODE_ENV,
-  PUBLIC_URL: process.env.PUBLIC_URL,
-  MINIAPP_URL: process.env.MINIAPP_URL,
+  PORT: process.env.PORT || '3000',
 
-  // Telegram
-  TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
-  TELEGRAM_PAYMENT_TOKEN: process.env.TELEGRAM_PAYMENT_TOKEN,
-  ADMIN_TELEGRAM_ID: process.env.ADMIN_TELEGRAM_ID,
-
-  // FAL AI
-  FAL_KEY: process.env.FAL_KEY,
-  FAL_KEY_SECRET: process.env.FAL_KEY_SECRET,
+  // Telegram Bot
+  TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN!,
+  WEBHOOK_DOMAIN: process.env.WEBHOOK_DOMAIN!,
+  WEBHOOK_PATH: '/bot',
+  MINIAPP_URL: process.env.MINIAPP_URL!,
 
   // Database
-  DATABASE_URL: process.env.DATABASE_URL,
+  DATABASE_URL: process.env.DATABASE_URL!,
 
-  // Digital Ocean Spaces
-  SPACES_KEY: process.env.SPACES_KEY,
-  SPACES_SECRET: process.env.SPACES_SECRET,
-  SPACES_BUCKET: process.env.SPACES_BUCKET,
-  SPACES_ENDPOINT: process.env.SPACES_ENDPOINT,
+  // File storage
+  TELEGRAM_FILE_API_URL: 'https://api.telegram.org/file/bot' + process.env.TELEGRAM_BOT_TOKEN,
+  UPLOAD_DIR: process.env.UPLOAD_DIR || './uploads',
+  PUBLIC_URL: process.env.PUBLIC_URL!,
 
-  // Derived settings
-  ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS?.split(',') || undefined,
+  // Redis
+  REDIS_URL: process.env.REDIS_URL!,
+
+  // Model paths
+  DEFAULT_BASE_MODEL_PATH: process.env.DEFAULT_BASE_MODEL_PATH!,
+  LORA_BASE_PATH: process.env.LORA_BASE_PATH!,
+
+  // Stability settings
+  TRAINING_TIMEOUT: 1000 * 60 * 30, // 30 minutes
+  GENERATION_TIMEOUT: 1000 * 60 * 5, // 5 minutes
 };
 
-// Log the raw env variables before parsing
-logger.info({
-  env: {
-    ADMIN_TELEGRAM_ID: process.env.ADMIN_TELEGRAM_ID,
-    NODE_ENV: process.env.NODE_ENV
-  }
-}, 'Raw environment variables');
-
-// Validate and export config
-export const config = configSchema.parse(envConfig);
+// For backwards compatibility and direct access
+export const {
+  ADMIN_TELEGRAM_ID,
+  NODE_ENV,
+  isDev,
+  PORT,
+  TELEGRAM_BOT_TOKEN,
+  WEBHOOK_DOMAIN,
+  WEBHOOK_PATH,
+  MINIAPP_URL,
+  DATABASE_URL,
+  TELEGRAM_FILE_API_URL,
+  UPLOAD_DIR,
+  PUBLIC_URL,
+  REDIS_URL,
+  DEFAULT_BASE_MODEL_PATH,
+  LORA_BASE_PATH,
+  TRAINING_TIMEOUT,
+  GENERATION_TIMEOUT,
+} = config;

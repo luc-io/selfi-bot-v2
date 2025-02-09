@@ -37,9 +37,14 @@ export async function setupServer(server: FastifyInstance, bot: Bot<BotContext>)
 
   // Add request hook to validate bot is initialized for webhook endpoints
   server.addHook('preHandler', async (request, reply) => {
-    if (request.url.startsWith('/bot') && !bot.isInited()) {
-      logger.error('Bot not initialized when handling request');
-      throw new Error('Bot not initialized');
+    if (request.url.startsWith('/bot')) {
+      try {
+        // Simple check to see if bot api is responding
+        await bot.api.getMe();
+      } catch (error) {
+        logger.error('Bot not properly initialized when handling request');
+        throw new Error('Bot not initialized');
+      }
     }
   });
 
@@ -69,8 +74,7 @@ export async function setupServer(server: FastifyInstance, bot: Bot<BotContext>)
       logger.error({
         error,
         update: request.body,
-        stack: error instanceof Error ? error.stack : undefined,
-        botInitialized: bot.isInited(),
+        stack: error instanceof Error ? error.stack : undefined
       }, 'Error handling Telegram update');
 
       return reply.status(500).send({
@@ -81,9 +85,17 @@ export async function setupServer(server: FastifyInstance, bot: Bot<BotContext>)
 
   // Health check endpoint
   server.get('/ping', async (request, reply) => {
+    let botStatus = false;
+    try {
+      await bot.api.getMe();
+      botStatus = true;
+    } catch (error) {
+      logger.error('Bot health check failed', error);
+    }
+
     return reply.status(200).send({ 
       status: 'ok',
-      botInitialized: bot.isInited()
+      botInitialized: botStatus
     });
   });
 
