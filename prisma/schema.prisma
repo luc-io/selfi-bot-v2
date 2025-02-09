@@ -57,6 +57,7 @@ model LoraModel {
   status           LoraStatus   @default(PENDING)
   previewImageUrl  String?
   isPublic         Boolean      @default(false)
+  isSelected       Boolean      @default(false)
   starsRequired    Int          @default(2)
   userDatabaseId   String
   user             User         @relation(fields: [userDatabaseId], references: [databaseId])
@@ -67,6 +68,7 @@ model LoraModel {
 
   @@index([userDatabaseId])
   @@index([isPublic])
+  @@index([isSelected])
   @@map("LoraModel")
 }
 
