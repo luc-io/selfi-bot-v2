@@ -48,7 +48,19 @@ composer.command('start', async (ctx) => {
     }
     
     const username = ctx.from.username ? `@${ctx.from.username}` : 'there';
-    const message = `👋 Welcome ${username}!\n\nYou have ${user.stars} ⭐\n\n🌟 Here's what I can do for you:\n\n/gen - Generate a new image with AI\n/stars - Buy stars (currency for generations)\n/balance - Check your stars balance\n/help - Show all available commands\n\nEach image generation costs 1 star. Get started with the /stars command to purchase some stars!`;
+    const message = `🎨 <b>Welcome ${username}!</b>
+
+You currently have <b>${user.stars} ⭐ stars</b>
+
+✨ <b>Available Commands:</b>
+• /gen - Generate stunning AI images
+• /stars - Get more stars
+• /balance - Check your balance
+• /help - View all commands
+
+💫 <i>Each image generation costs 1 star. Use /stars to get started!</i>
+
+Need help? Use /help to learn more about all features.`;
 
     await ctx.reply(message);
     logger.info({ telegramId }, 'Welcome message sent');
