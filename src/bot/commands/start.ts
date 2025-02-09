@@ -24,7 +24,7 @@ composer.command('start', async (ctx) => {
     
     // If this is a new user, notify admin
     if (user.createdAt.getTime() === user.updatedAt.getTime()) {
-      await notifyNewUser(ctx.me, telegramId, ctx.from.username ?? undefined);
+      await notifyNewUser(ctx.api, telegramId, ctx.from.username ?? undefined);
     }
     
     const username = ctx.from.username ? `@${ctx.from.username}` : 'there';
