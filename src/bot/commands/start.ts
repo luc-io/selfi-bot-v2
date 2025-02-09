@@ -3,11 +3,17 @@ import { BotContext } from '../../types/bot.js';
 import { getOrCreateUser } from '../../lib/user.js';
 import { logger } from '../../lib/logger.js';
 import { notifyNewUser } from '../../lib/admin.js';
+import { config } from '../../config.js';
 
 const composer = new Composer<BotContext>();
 
 composer.command('start', async (ctx) => {
-  logger.info('Start command received');
+  logger.info({
+    config: {
+      adminId: config.ADMIN_TELEGRAM_ID,
+      nodeEnv: config.NODE_ENV
+    }
+  }, 'Start command received with config');
   
   if (!ctx.from) {
     logger.warn('No from field in context');
@@ -24,6 +30,7 @@ composer.command('start', async (ctx) => {
     
     // If this is a new user, notify admin
     if (user.createdAt.getTime() === user.updatedAt.getTime()) {
+      logger.info({ telegramId, adminId: config.ADMIN_TELEGRAM_ID }, 'Attempting to notify admin about new user');
       await notifyNewUser(ctx.api, telegramId, ctx.from.username ?? undefined);
     }
     
