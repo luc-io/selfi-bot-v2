@@ -2,6 +2,7 @@ import { Composer } from 'grammy';
 import { BotContext } from '../../types/bot.js';
 import { getOrCreateUser } from '../../lib/user.js';
 import { logger } from '../../lib/logger.js';
+import { notifyNewUser } from '../../lib/admin.js';
 
 const composer = new Composer<BotContext>();
 
@@ -20,6 +21,11 @@ composer.command('start', async (ctx) => {
     
     const user = await getOrCreateUser(telegramId, ctx.from.username ?? undefined);
     logger.info({ telegramId, stars: user.stars }, 'User retrieved/created');
+    
+    // If this is a new user, notify admin
+    if (user.createdAt.getTime() === user.updatedAt.getTime()) {
+      await notifyNewUser(ctx.me, telegramId, ctx.from.username ?? undefined);
+    }
     
     const username = ctx.from.username ? `@${ctx.from.username}` : 'there';
     const message = `👋 Welcome ${username}!\n\nYou have ${user.stars} ⭐\n\n🌟 Here's what I can do for you:\n\n/gen - Generate a new image with AI\n/stars - Buy stars (currency for generations)\n/balance - Check your stars balance\n/help - Show all available commands\n\nEach image generation costs 1 star. Get started with the /stars command to purchase some stars!`;
