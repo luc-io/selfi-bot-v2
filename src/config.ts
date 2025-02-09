@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { logger } from './lib/logger.js';
 
 const configSchema = z.object({
   // Server
@@ -10,7 +11,18 @@ const configSchema = z.object({
   // Telegram
   TELEGRAM_BOT_TOKEN: z.string(),
   TELEGRAM_PAYMENT_TOKEN: z.string().optional(),
-  ADMIN_TELEGRAM_ID: z.string().optional().transform(val => val || undefined),
+  ADMIN_TELEGRAM_ID: z
+    .string()
+    .min(1)
+    .transform((val) => {
+      if (!val) {
+        logger.warn('ADMIN_TELEGRAM_ID is empty');
+        return undefined;
+      }
+      logger.info({ adminId: val }, 'ADMIN_TELEGRAM_ID loaded');
+      return val;
+    })
+    .optional(),
 
   // FAL AI
   FAL_KEY: z.string(),
@@ -58,6 +70,13 @@ const envConfig = {
   // Derived settings
   ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS?.split(',') || undefined,
 };
+
+logger.info({ 
+  envConfig: { 
+    adminId: envConfig.ADMIN_TELEGRAM_ID,
+    nodeEnv: envConfig.NODE_ENV
+  } 
+}, 'Loading configuration');
 
 // Validate and export config
 export const config = configSchema.parse(envConfig);
