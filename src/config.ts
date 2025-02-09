@@ -10,6 +10,8 @@ export const config = {
 
   // Bot Configuration
   TELEGRAM_BOT_TOKEN: process.env.BOT_TOKEN!,
+
+  // Legacy config structure (keeping for compatibility)
   bot: {
     token: process.env.BOT_TOKEN!,
     webhookUrl: process.env.BOT_WEBHOOK_URL,
