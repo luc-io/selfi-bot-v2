@@ -7,6 +7,12 @@ export async function notifyAdmin(
   api: Api<RawApi>,
   message: string
 ): Promise<void> {
+  // Skip notification if no admin ID is configured
+  if (!config.ADMIN_TELEGRAM_ID) {
+    logger.info('No admin Telegram ID configured, skipping notification');
+    return;
+  }
+
   try {
     await api.sendMessage(config.ADMIN_TELEGRAM_ID, message);
     logger.info({ message }, 'Admin notification sent');
