@@ -1,14 +1,16 @@
-import { Context } from 'telegraf';
-import { Message } from 'telegraf/types';
+import { Context, NarrowedContext } from 'telegraf';
+import { Message, Update } from 'telegraf/types';
 import { prisma } from '../../db';
-import { ADMIN_TELEGRAM_ID } from '../../config';
-import { TransactionType } from '@prisma/client';
+import { config } from '../../config';
+import { PrismaClient, TransactionType } from '@prisma/client';
 
-export async function grantCommand(ctx: Context) {
+type MessageContext = NarrowedContext<Context<Update>, Update.MessageUpdate>;
+
+export async function grantCommand(ctx: MessageContext) {
   try {
     // Check if sender is admin
     const senderId = ctx.message?.from?.id;
-    if (!senderId || senderId.toString() !== ADMIN_TELEGRAM_ID?.toString()) {
+    if (!senderId || senderId.toString() !== config.ADMIN_TELEGRAM_ID?.toString()) {
       await ctx.reply('⛔️ This command is only available for administrators.');
       return;
     }
@@ -42,7 +44,7 @@ export async function grantCommand(ctx: Context) {
     }
 
     // Create transaction and update user stars in a transaction
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: PrismaClient) => {
       // Create star transaction
       await tx.starTransaction.create({
         data: {
