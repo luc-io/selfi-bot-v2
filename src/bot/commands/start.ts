@@ -43,11 +43,15 @@ composer.command('start', async (ctx) => {
         adminId: config.ADMIN_TELEGRAM_ID,
         botInfo: ctx.me
       }, 'Attempting to notify admin about new user');
-      await notifyNewUser(ctx.api, telegramId, ctx.from.username ?? undefined);
+      await notifyNewUser(ctx.api, telegramId, {
+        username: ctx.from.username,
+        firstName: ctx.from.first_name,
+        lastName: ctx.from.last_name
+      });
       logger.info('Admin notification sent successfully');
     }
     
-    const username = ctx.from.username ? `@${ctx.from.username}` : 'there';
+    const username = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name || 'there';
     const message = `🎨 <b>Welcome ${username}!</b>
 
 You currently have <b>${user.stars} ⭐ stars</b>
