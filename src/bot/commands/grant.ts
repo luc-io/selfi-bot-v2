@@ -1,31 +1,30 @@
-import { Context, NarrowedContext } from 'telegraf';
-import { Message, Update } from 'telegraf/types';
-import { prisma } from '../../db';
-import { config } from '../../config';
-import { Prisma, TransactionType } from '@prisma/client';
+import { Composer } from 'grammy';
+import { BotContext } from '../../types/bot.js';
+import { prisma } from '../../lib/prisma.js';
+import { config } from '../../config.js';
+import { TransactionType } from '@prisma/client';
 
-type MessageContext = NarrowedContext<Context<Update>, Update.MessageUpdate>;
+const composer = new Composer<BotContext>();
 
-export async function grantCommand(ctx: MessageContext) {
+composer.command('grant', async (ctx) => {
   try {
     // Check if sender is admin
-    const senderId = ctx.message?.from?.id;
+    const senderId = ctx.from?.id;
     if (!senderId || senderId.toString() !== config.ADMIN_TELEGRAM_ID?.toString()) {
       await ctx.reply('⛔️ This command is only available for administrators.');
       return;
     }
 
     // Parse command arguments
-    const message = ctx.message as Message.TextMessage;
-    const args = message.text.split(' ');
+    const args = ctx.match.split(' ');
     
-    if (args.length !== 3) {
+    if (args.length !== 2) {
       await ctx.reply('❌ Usage: /grant <telegramId> <amount>');
       return;
     }
 
-    const targetTelegramId = args[1];
-    const amount = parseInt(args[2]);
+    const targetTelegramId = args[0];
+    const amount = parseInt(args[1]);
 
     // Validate amount
     if (isNaN(amount) || amount <= 0) {
@@ -73,7 +72,7 @@ export async function grantCommand(ctx: MessageContext) {
     await ctx.reply(`✅ Granted ${amount} stars to user ${targetUser.username || targetTelegramId}`);
     
     try {
-      await ctx.telegram.sendMessage(
+      await ctx.api.sendMessage(
         parseInt(targetTelegramId),
         `🎁 You received ${amount} stars from admin!`
       );
@@ -84,4 +83,6 @@ export async function grantCommand(ctx: MessageContext) {
     console.error('Grant command error:', error);
     await ctx.reply('❌ An error occurred while processing the command');
   }
-}
+});
+
+export default composer;
