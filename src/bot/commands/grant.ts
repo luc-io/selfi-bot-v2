@@ -16,15 +16,15 @@ composer.command('grant', async (ctx) => {
     }
 
     // Parse command arguments
-    const args = ctx.match.split(' ');
+    const args = ctx.msg.text.split(' ').slice(1); // Remove the command part
     
     if (args.length !== 2) {
       await ctx.reply('❌ Usage: /grant <telegramId> <amount>');
       return;
     }
 
-    const targetTelegramId = args[0];
-    const amount = parseInt(args[1]);
+    const [targetTelegramId, amountStr] = args;
+    const amount = parseInt(amountStr);
 
     // Validate amount
     if (isNaN(amount) || amount <= 0) {
