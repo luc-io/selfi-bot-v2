@@ -1,5 +1,7 @@
 import { prisma } from './prisma.js';
 import { logger } from './logger.js';
+import { config } from '../config.js';
+import { bot } from '../bot/bot.js';
 
 export async function getOrCreateUser(telegramId: string, username?: string) {
   try {
@@ -31,6 +33,18 @@ export async function getOrCreateUser(telegramId: string, username?: string) {
           }
         }
       });
+
+      // Send notification to admin
+      try {
+        const userInfo = username ? `@${username}` : `User`;
+        await bot.api.sendMessage(
+          config.adminUserId,
+          `🆕 New User Registered!\n\nID: ${telegramId}\nUsername: ${userInfo}`
+        );
+      } catch (error) {
+        logger.error('Failed to send admin notification:', error);
+        // Don't throw error here to avoid affecting user registration
+      }
     } else if (username && username !== user.username) {
       // Update username if changed
       user = await prisma.user.update({
