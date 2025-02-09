@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import { logger } from './lib/logger.js';
+import * as dotenv from 'dotenv';
+
+// Load .env file
+dotenv.config();
 
 const configSchema = z.object({
   // Server
@@ -10,6 +15,18 @@ const configSchema = z.object({
   // Telegram
   TELEGRAM_BOT_TOKEN: z.string(),
   TELEGRAM_PAYMENT_TOKEN: z.string().optional(),
+  ADMIN_TELEGRAM_ID: z
+    .string()
+    .min(1)
+    .transform((val) => {
+      if (!val) {
+        logger.warn('ADMIN_TELEGRAM_ID is empty');
+        return undefined;
+      }
+      logger.info({ adminId: val }, 'ADMIN_TELEGRAM_ID loaded');
+      return val;
+    })
+    .optional(),
 
   // FAL AI
   FAL_KEY: z.string(),
@@ -28,7 +45,6 @@ const configSchema = z.object({
   ALLOWED_ORIGINS: z.array(z.string()).default(['http://localhost:5173'])
 });
 
-// Parse environment variables
 const envConfig = {
   // Server
   PORT: process.env.PORT,
@@ -39,6 +55,7 @@ const envConfig = {
   // Telegram
   TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
   TELEGRAM_PAYMENT_TOKEN: process.env.TELEGRAM_PAYMENT_TOKEN,
+  ADMIN_TELEGRAM_ID: process.env.ADMIN_TELEGRAM_ID,
 
   // FAL AI
   FAL_KEY: process.env.FAL_KEY,
@@ -56,6 +73,14 @@ const envConfig = {
   // Derived settings
   ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS?.split(',') || undefined,
 };
+
+// Log the raw env variables before parsing
+logger.info({
+  env: {
+    ADMIN_TELEGRAM_ID: process.env.ADMIN_TELEGRAM_ID,
+    NODE_ENV: process.env.NODE_ENV
+  }
+}, 'Raw environment variables');
 
 // Validate and export config
 export const config = configSchema.parse(envConfig);
