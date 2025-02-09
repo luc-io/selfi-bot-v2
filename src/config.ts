@@ -10,6 +10,7 @@ const configSchema = z.object({
   // Telegram
   TELEGRAM_BOT_TOKEN: z.string(),
   TELEGRAM_PAYMENT_TOKEN: z.string().optional(),
+  ADMIN_TELEGRAM_ID: z.string(),
 
   // FAL AI
   FAL_KEY: z.string(),
@@ -39,6 +40,7 @@ const envConfig = {
   // Telegram
   TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
   TELEGRAM_PAYMENT_TOKEN: process.env.TELEGRAM_PAYMENT_TOKEN,
+  ADMIN_TELEGRAM_ID: process.env.ADMIN_TELEGRAM_ID,
 
   // FAL AI
   FAL_KEY: process.env.FAL_KEY,
