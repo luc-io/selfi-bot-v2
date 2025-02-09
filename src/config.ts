@@ -1,5 +1,9 @@
 import { z } from 'zod';
 import { logger } from './lib/logger.js';
+import * as dotenv from 'dotenv';
+
+// Load .env file
+dotenv.config();
 
 const configSchema = z.object({
   // Server
@@ -41,7 +45,6 @@ const configSchema = z.object({
   ALLOWED_ORIGINS: z.array(z.string()).default(['http://localhost:5173'])
 });
 
-// Parse environment variables
 const envConfig = {
   // Server
   PORT: process.env.PORT,
@@ -71,12 +74,13 @@ const envConfig = {
   ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS?.split(',') || undefined,
 };
 
-logger.info({ 
-  envConfig: { 
-    adminId: envConfig.ADMIN_TELEGRAM_ID,
-    nodeEnv: envConfig.NODE_ENV
-  } 
-}, 'Loading configuration');
+// Log the raw env variables before parsing
+logger.info({
+  env: {
+    ADMIN_TELEGRAM_ID: process.env.ADMIN_TELEGRAM_ID,
+    NODE_ENV: process.env.NODE_ENV
+  }
+}, 'Raw environment variables');
 
 // Validate and export config
 export const config = configSchema.parse(envConfig);
