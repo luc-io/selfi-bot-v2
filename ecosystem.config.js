@@ -10,6 +10,12 @@ module.exports = {
       NODE_ENV: 'production',
       LOG_LEVEL: 'info'
     },
+    env_production: {
+      NODE_ENV: 'production',
+      LOG_LEVEL: 'info'
+    },
+    // Load .env file
+    env_file: '.env',
     // Logging
     error_file: 'logs/error.log',
     out_file: 'logs/out.log',
