@@ -70,7 +70,7 @@ async function main() {
     // Initialize bot with error handling
     let bot: Bot<BotContext>;
     try {
-      bot = new Bot<BotContext>(config.BOT_TOKEN); // Changed from TELEGRAM_BOT_TOKEN to BOT_TOKEN
+      bot = new Bot<BotContext>(config.TELEGRAM_BOT_TOKEN);
       logger.info('Bot instance created');
 
       // Add middleware
@@ -133,7 +133,7 @@ async function main() {
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down');
   try {
-    const bot = new Bot<BotContext>(config.BOT_TOKEN);
+    const bot = new Bot<BotContext>(config.TELEGRAM_BOT_TOKEN);
     await bot.api.deleteWebhook();
     logger.info('Webhook deleted');
 
