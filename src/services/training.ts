@@ -2,6 +2,7 @@ import { fal } from "@fal-ai/client";
 import { logger } from '../lib/logger.js';
 import { StarsService } from './stars.js';
 import { prisma } from '../lib/prisma.js';
+import EventEmitter from 'events';
 
 interface FalFile {
   url: string;
@@ -47,9 +48,12 @@ export interface TrainModelParams {
 }
 
 export interface TrainingProgress {
-  status: 'pending' | 'training' | 'completed' | 'failed';
+  status: 'pending' | 'training' | 'completed' | 'failed' | 'cancelled';
   progress: number;
   message?: string;
+  error?: string;
+  startTime?: Date;
+  estimatedTimeRemaining?: number;
 }
 
 export interface TrainingResult {
@@ -74,11 +78,13 @@ if (!process.env.FAL_KEY) {
 // Now TypeScript knows FAL_KEY is not undefined
 const credentials = process.env.FAL_KEY;
 
-export class TrainingService {
+export class TrainingService extends EventEmitter {
   private readonly activeTrainings = new Map<string, TrainingProgress>();
   private readonly TRAINING_COST = 150; // Training cost in stars
+  private readonly falAbortControllers = new Map<string, AbortController>();
 
   constructor() {
+    super();
     fal.config({
       credentials
     });
@@ -123,15 +129,27 @@ export class TrainingService {
     return this.activeTrainings.get(requestId) || null;
   }
 
+  private calculateEstimatedTimeRemaining(currentProgress: number, startTime: Date): number {
+    const elapsedTime = Date.now() - startTime.getTime();
+    if (currentProgress === 0) return 0;
+    const timePerPercent = elapsedTime / currentProgress;
+    return Math.round((100 - currentProgress) * timePerPercent / 1000); // Convert to seconds
+  }
+
   private updateTrainingProgress(requestId: string, update: FalQueueStatusResponse) {
     if (!update.logs || update.logs.length === 0) {
       logger.debug({ requestId }, 'No logs in update');
       return;
     }
 
+    // Get current progress
+    const currentProgress = this.activeTrainings.get(requestId);
+    if (!currentProgress) return;
+
     // Update progress based on logs
-    let progress = 0;
-    let message = 'Processing...';
+    let progress = currentProgress.progress;
+    let message = currentProgress.message || 'Processing...';
+    let startTime = currentProgress.startTime || new Date();
 
     try {
       // Find progress message
@@ -155,48 +173,51 @@ export class TrainingService {
         message = lastValidMessage.message;
       }
 
+      // Calculate estimated time remaining
+      const estimatedTimeRemaining = this.calculateEstimatedTimeRemaining(progress, startTime);
+
       // Update status
-      let currentStatus: TrainingProgress['status'] = 'training';
+      let currentStatus: TrainingProgress['status'] = currentProgress.status;
       
       if (update.status === 'COMPLETED') {
         currentStatus = 'completed';
         progress = 100;
         message = 'Training completed successfully';
-
-        this.activeTrainings.set(requestId, {
-          status: currentStatus,
-          progress,
-          message
-        });
-
-        // Clean up after delay
-        setTimeout(() => {
-          this.activeTrainings.delete(requestId);
-        }, 60 * 1000); // Remove after 1 minute
       } else if (update.status === 'FAILED') {
         currentStatus = 'failed';
         message = 'Training failed';
-
-        this.activeTrainings.set(requestId, {
-          status: currentStatus,
-          progress,
-          message
-        });
-      } else {
-        // Update training status
-        this.activeTrainings.set(requestId, {
-          status: currentStatus,
-          progress,
-          message
-        });
       }
+
+      // Update training status
+      const updatedProgress: TrainingProgress = {
+        status: currentStatus,
+        progress,
+        message,
+        startTime,
+        estimatedTimeRemaining,
+        error: currentProgress.error
+      };
+
+      this.activeTrainings.set(requestId, updatedProgress);
+
+      // Emit progress update event
+      this.emit('trainingProgress', { requestId, progress: updatedProgress });
 
       logger.debug({ 
         requestId, 
         status: currentStatus, 
         progress, 
-        message 
+        message,
+        estimatedTimeRemaining
       }, 'Updated training progress');
+
+      // Clean up completed trainings after delay
+      if (currentStatus === 'completed' || currentStatus === 'failed' || currentStatus === 'cancelled') {
+        setTimeout(() => {
+          this.activeTrainings.delete(requestId);
+          this.falAbortControllers.delete(requestId);
+        }, 60 * 1000); // Remove after 1 minute
+      }
     } catch (error) {
       logger.error({ 
         error, 
@@ -206,7 +227,56 @@ export class TrainingService {
     }
   }
 
+  public async cancelTraining(requestId: string): Promise<boolean> {
+    try {
+      const controller = this.falAbortControllers.get(requestId);
+      if (!controller) {
+        logger.warn({ requestId }, 'No abort controller found for training');
+        return false;
+      }
+
+      // Abort the FAL request
+      controller.abort();
+
+      // Update training status
+      const training = this.activeTrainings.get(requestId);
+      if (training) {
+        const updatedProgress: TrainingProgress = {
+          ...training,
+          status: 'cancelled',
+          message: 'Training cancelled by user'
+        };
+        this.activeTrainings.set(requestId, updatedProgress);
+        this.emit('trainingProgress', { requestId, progress: updatedProgress });
+      }
+
+      // Update database status
+      await prisma.$transaction([
+        prisma.loraModel.update({
+          where: { databaseId: requestId },
+          data: { status: 'CANCELLED' }
+        }),
+        prisma.training.update({
+          where: { databaseId: requestId },
+          data: { 
+            status: 'CANCELLED',
+            completedAt: new Date()
+          }
+        })
+      ]);
+
+      logger.info({ requestId }, 'Training cancelled successfully');
+      return true;
+    } catch (error) {
+      logger.error({ error, requestId }, 'Failed to cancel training');
+      return false;
+    }
+  }
+
   public async trainModel(params: TrainModelParams, isTest: boolean = false): Promise<TrainingResult> {
+    const abortController = new AbortController();
+    let requestId: string | undefined;
+
     try {
       logger.info({ params, isTest }, 'Starting model training');
 
@@ -233,8 +303,21 @@ export class TrainingService {
           is_style: params.is_style,
         } as FalTrainingInput,
         logs: true,
+        signal: abortController.signal,
         onQueueUpdate: (update: FalQueueStatusResponse) => {
+          requestId = update.requestId;
           if (update.status === "IN_PROGRESS") {
+            // Initialize training progress if not exists
+            if (!this.activeTrainings.has(update.requestId)) {
+              this.activeTrainings.set(update.requestId, {
+                status: 'training',
+                progress: 0,
+                message: 'Starting training...',
+                startTime: new Date()
+              });
+              this.falAbortControllers.set(update.requestId, abortController);
+            }
+
             // Update progress tracking using the update's requestId
             this.updateTrainingProgress(update.requestId, update);
 
@@ -272,23 +355,23 @@ export class TrainingService {
           }
         });
 
-        // Find training record by result.requestId in loraId
-        const training = await prisma.training.findFirst({
-          where: { loraId: result.requestId }
-        });
-
-        if (training) {
-          // Update training record with stars spent
-          await prisma.training.update({
-            where: { databaseId: training.databaseId },
-            data: {
-              starsSpent: this.TRAINING_COST
-            }
+        if (requestId) {
+          const training = await prisma.training.findFirst({
+            where: { loraId: requestId }
           });
-        } else {
-          logger.warn({ 
-            requestId: result.requestId 
-          }, 'Could not find training record to update stars spent');
+
+          if (training) {
+            await prisma.training.update({
+              where: { databaseId: training.databaseId },
+              data: {
+                starsSpent: this.TRAINING_COST
+              }
+            });
+          } else {
+            logger.warn({ 
+              requestId
+            }, 'Could not find training record to update stars spent');
+          }
         }
       }
 
@@ -301,6 +384,22 @@ export class TrainingService {
 
       return trainingResult;
     } catch (error) {
+      // Clean up on error
+      if (requestId) {
+        this.falAbortControllers.delete(requestId);
+        const training = this.activeTrainings.get(requestId);
+        if (training) {
+          const updatedProgress: TrainingProgress = {
+            ...training,
+            status: 'failed',
+            message: 'Training failed',
+            error: error instanceof Error ? error.message : 'Unknown error'
+          };
+          this.activeTrainings.set(requestId, updatedProgress);
+          this.emit('trainingProgress', { requestId, progress: updatedProgress });
+        }
+      }
+
       logger.error({ error }, 'Model training failed');
       throw error;
     }
