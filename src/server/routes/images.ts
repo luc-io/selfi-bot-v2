@@ -2,9 +2,11 @@ import { FastifyPluginAsync } from 'fastify';
 import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
 
-// Note: We use a named default export for consistency with other routes
+// Note: The actual route will be /api/images because the parent plugin has the /api prefix
 const imagesRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get('/images', {
+  fastify.route({
+    method: 'GET',
+    url: '/',
     schema: {
       headers: {
         type: 'object',
@@ -26,6 +28,15 @@ const imagesRoutes: FastifyPluginAsync = async (fastify) => {
         const telegramId = request.headers['x-telegram-user-id'] as string;
         const { page = 1, limit = 10 } = request.query as { page?: number; limit?: number };
         const skip = (page - 1) * limit;
+
+        logger.info({
+          telegramId,
+          page,
+          limit,
+          url: request.url,
+          method: request.method,
+          prefix: fastify.prefix
+        }, 'Images route handler called');
 
         // Find user by telegram ID
         const user = await prisma.user.findUnique({
