@@ -155,8 +155,8 @@ export async function generateImage(params: GenerateImageParams & { telegramId: 
         loraScale: params.loras?.[0]?.scale
       };
 
-      // Convert the seed to BigInt string
-      const seedString = result.data.seed ? BigInt(result.data.seed).toString() : null;
+      // Convert the seed to BigInt
+      const seedValue = result.data.seed ? BigInt(result.data.seed) : null;
 
       const savedImage = await prisma.generation.create({
         data: {
@@ -165,7 +165,7 @@ export async function generateImage(params: GenerateImageParams & { telegramId: 
           loraId: firstLoraId,
           prompt: params.prompt,
           imageUrl: img.url,
-          seed: seedString,
+          seed: seedValue,
           starsUsed: requiredStars / numImages,
           metadata: metadata
         }
