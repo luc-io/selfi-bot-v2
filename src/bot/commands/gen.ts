@@ -35,14 +35,14 @@ function normalizeCommandText(text: string): string {
 
 function parseInlineParams(text: string): { prompt: string; params: InlineParams } {
   const normalizedText = normalizeCommandText(text);
-  const parts = normalizedText.split(/\\s+--/);
-  const prompt = parts[0].split(/\\/gen\\s*/)[1]?.trim();
+  const parts = normalizedText.split(/\s+--/);
+  const prompt = parts[0].split(/\/gen\s+/)[1]?.trim();
   const params: InlineParams = {};
 
   logger.info({ originalText: text, normalizedText, parts }, 'Parsing inline parameters');
 
   for (let i = 1; i < parts.length; i++) {
-    const [key, value] = parts[i].split(/\\s+/);
+    const [key, value] = parts[i].split(/\s+/);
     switch (key) {
       case 'ar':
         params.ar = value;
