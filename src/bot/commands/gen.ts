@@ -17,6 +17,17 @@ interface InlineParams {
   l?: string;
 }
 
+interface GenerationParams {
+  imageSize?: string;
+  numInferenceSteps?: number;
+  guidanceScale?: number;
+  numImages?: number;
+  enableSafetyChecker?: boolean;
+  outputFormat?: 'jpeg' | 'png';
+  loras?: { path: string; scale: number }[];
+  seed?: number;
+}
+
 function parseInlineParams(text: string): { prompt: string; params: InlineParams } {
   const parts = text.split(/\s+--/);
   const prompt = parts[0].split(/\/gen\s*/)[1]?.trim();
@@ -52,18 +63,18 @@ function parseInlineParams(text: string): { prompt: string; params: InlineParams
 function convertInlineToGenerationParams(
   inlineParams: InlineParams,
   userParams: Record<string, any> | null
-) {
-  const baseParams = {
+): GenerationParams {
+  const baseParams: GenerationParams = {
     imageSize: userParams?.image_size,
     numInferenceSteps: userParams?.num_inference_steps,
     guidanceScale: userParams?.guidance_scale,
     numImages: userParams?.num_images,
     enableSafetyChecker: userParams?.enable_safety_checker,
     outputFormat: userParams?.output_format as 'jpeg' | 'png' | undefined,
-    loras: userParams?.loras
+    loras: userParams?.loras,
+    seed: undefined
   };
 
-  // Override with inline parameters if provided
   if (inlineParams.ar) {
     const [width, height] = inlineParams.ar.split(':');
     if (width === '16' && height === '9') {
