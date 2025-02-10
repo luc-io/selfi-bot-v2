@@ -49,13 +49,34 @@ export async function setupServer(server: FastifyInstance, bot: Bot<BotContext>)
     }
   });
 
-  // Register API routes
-  await server.register(paramsRoutes, { prefix: '/api' });
-  await server.register(loraRoutes, { prefix: '/api' });
-  await server.register(trainingRoutes, { prefix: '/api' });
-  await server.register(imagesRoutes, { prefix: '/api' });
-  await server.register(userRoutes);
-  logger.info('API routes configured');
+  // Debug logging for route registration
+  logger.info('Starting route registration');
+
+  // Register API routes with debug logging
+  try {
+    await server.register(async (fastify) => {
+      await fastify.register(paramsRoutes);
+      await fastify.register(loraRoutes);
+      await fastify.register(trainingRoutes);
+      await fastify.register(imagesRoutes);
+      logger.info('API sub-routes registered successfully');
+    }, { prefix: '/api' });
+
+    await server.register(userRoutes);
+    logger.info('User routes registered');
+
+    // Log all registered routes
+    server.routes.forEach(route => {
+      logger.info({
+        method: route.method,
+        url: route.url,
+        prefix: route.prefix
+      }, 'Registered route');
+    });
+  } catch (error) {
+    logger.error({ error }, 'Failed to register routes');
+    throw error;
+  }
 
   // Webhook endpoint
   server.post<{
@@ -101,5 +122,6 @@ export async function setupServer(server: FastifyInstance, bot: Bot<BotContext>)
     });
   });
 
+  logger.info('Server setup completed');
   return server;
 }
