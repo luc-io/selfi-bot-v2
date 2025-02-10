@@ -1,13 +1,9 @@
 import { createHash } from 'crypto';
 
+const MAX_SEED = 9999999; // 7 digits
+
 export function compressLongSeed(seed: number): number {
-  const hash = createHash('md5')
-    .update(seed.toString())
-    .digest('hex');
-    
-  // Extract last 7 digits
-  const compressedSeed = parseInt(hash.slice(-7), 16) % 10000000;
-  return compressedSeed;
+  return Math.abs(seed) % MAX_SEED;
 }
 
 export function generateFalSeed(): number {
