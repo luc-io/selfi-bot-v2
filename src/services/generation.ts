@@ -30,6 +30,27 @@ fal.config({
   credentials: falKey
 });
 
+const MAX_SAFE_BIGINT = BigInt('9223372036854775807'); // PostgreSQL bigint max
+const MIN_SAFE_BIGINT = BigInt('-9223372036854775808'); // PostgreSQL bigint min
+
+function validateAndConvertSeed(seed: number | string | undefined): bigint | null {
+  if (!seed) return null;
+  
+  try {
+    const bigIntSeed = typeof seed === 'string' ? BigInt(seed) : BigInt(seed.toString());
+    
+    if (bigIntSeed > MAX_SAFE_BIGINT || bigIntSeed < MIN_SAFE_BIGINT) {
+      logger.warn({ seed, bigIntSeed: bigIntSeed.toString() }, 'Seed value out of PostgreSQL bigint range, defaulting to null');
+      return null;
+    }
+    
+    return bigIntSeed;
+  } catch (error) {
+    logger.warn({ seed, error }, 'Failed to convert seed to BigInt, defaulting to null');
+    return null;
+  }
+}
+
 export async function generateImage(params: GenerateImageParams & { telegramId: string }): Promise<GenerationResponse> {
   logger.info({ params }, 'Starting image generation with params');
 
@@ -155,8 +176,9 @@ export async function generateImage(params: GenerateImageParams & { telegramId: 
         loraScale: params.loras?.[0]?.scale
       };
 
-      // Convert the seed to BigInt
-      const seedValue = result.data.seed ? BigInt(result.data.seed) : null;
+      // Convert and validate seed
+      const validatedSeed = validateAndConvertSeed(result.data.seed);
+      logger.info({ originalSeed: result.data.seed, validatedSeed }, 'Seed validation result');
 
       const savedImage = await prisma.generation.create({
         data: {
@@ -165,7 +187,7 @@ export async function generateImage(params: GenerateImageParams & { telegramId: 
           loraId: firstLoraId,
           prompt: params.prompt,
           imageUrl: img.url,
-          seed: seedValue,
+          seed: validatedSeed,
           starsUsed: requiredStars / numImages,
           metadata: metadata
         }
