@@ -52,13 +52,13 @@ export async function setupServer(server: FastifyInstance, bot: Bot<BotContext>)
   // Debug logging for route registration
   logger.info('Starting route registration');
 
-  // Register API routes with debug logging
+  // Register API routes with prefixes
   try {
     await server.register(async (fastify) => {
       await fastify.register(paramsRoutes);
       await fastify.register(loraRoutes);
       await fastify.register(trainingRoutes);
-      await fastify.register(imagesRoutes);
+      await fastify.register(imagesRoutes, { prefix: '/images' });
       logger.info('API sub-routes registered successfully');
     }, { prefix: '/api' });
 
