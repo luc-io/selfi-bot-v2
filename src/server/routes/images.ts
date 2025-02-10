@@ -2,8 +2,9 @@ import { FastifyPluginAsync } from 'fastify';
 import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
 
-export const imagesRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get('/', {
+// Note: We use a named default export for consistency with other routes
+const imagesRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.get('/images', {
     schema: {
       headers: {
         type: 'object',
@@ -97,3 +98,5 @@ export const imagesRoutes: FastifyPluginAsync = async (fastify) => {
 
   logger.info('Images routes registered');
 };
+
+export default imagesRoutes;
