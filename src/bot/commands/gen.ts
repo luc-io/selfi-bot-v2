@@ -67,10 +67,10 @@ function parseInlineParams(text: string): { prompt: string; params: InlineParams
   return { prompt, params };
 }
 
-function convertInlineToGenerationParams(
+async function convertInlineToGenerationParams(
   inlineParams: InlineParams,
   userParams: Record<string, any> | null
-): GenerationParams {
+): Promise<GenerationParams> {
   const baseParams: GenerationParams = {
     imageSize: userParams?.image_size,
     numInferenceSteps: userParams?.num_inference_steps,
@@ -98,11 +98,22 @@ function convertInlineToGenerationParams(
   if (inlineParams.n) baseParams.numImages = inlineParams.n;
 
   if (inlineParams.l) {
-    const [loraId, scale] = inlineParams.l.split(':');
-    baseParams.loras = [{
-      path: loraId,
-      scale: parseFloat(scale) || 1
-    }];
+    const [triggerWord, scale] = inlineParams.l.split(':');
+    // Find LoRA by trigger word
+    const lora = await prisma.loraModel.findFirst({
+      where: { triggerWord },
+      select: { databaseId: true }
+    });
+
+    if (lora) {
+      baseParams.loras = [{
+        path: lora.databaseId,
+        scale: parseFloat(scale) || 1
+      }];
+      logger.info({ triggerWord, loraId: lora.databaseId, scale }, 'Found LoRA by trigger word');
+    } else {
+      logger.warn({ triggerWord }, 'LoRA not found by trigger word');
+    }
   }
 
   return baseParams;
@@ -169,7 +180,7 @@ Parameters:
     });
 
     const userParams = user?.parameters?.params as Record<string, any> | null;
-    const generationParams = convertInlineToGenerationParams(params, userParams);
+    const generationParams = await convertInlineToGenerationParams(params, userParams);
     const processingMsg = await ctx.reply("🎨 Generating your art...");
 
     logger.info({ userParams: generationParams, prompt }, "Starting generation with parameters");
