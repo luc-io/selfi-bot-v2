@@ -8,6 +8,7 @@ import { logger } from "../../lib/logger.js";
 import { compressLongSeed, generateFalSeed } from "../../utils/seed.js";
 
 const composer = new Composer<BotContext>();
+const MAX_SEED = 9999999;
 
 interface InlineParams {
   ar?: string;
@@ -30,7 +31,7 @@ interface GenerationParams {
 }
 
 function normalizeCommandText(text: string): string {
-  return text.replace(/[—–]/g, '--');
+  return text.replace(/[\u2014\u2013]/g, '--');
 }
 
 function parseInlineParams(text: string): { prompt: string; params: InlineParams } {
@@ -54,7 +55,8 @@ function parseInlineParams(text: string): { prompt: string; params: InlineParams
         params.c = parseFloat(value);
         break;
       case 'seed':
-        params.seed = parseInt(value);
+        const seedValue = parseInt(value);
+        params.seed = seedValue <= MAX_SEED ? seedValue : seedValue % MAX_SEED;
         break;
       case 'n':
         params.n = parseInt(value);
@@ -128,7 +130,7 @@ composer.command("gen", hasSubscription, async (ctx) => {
   const { prompt, params } = parseInlineParams(ctx.message.text);
   
   if (!prompt) {
-    await ctx.reply(`❌ Please provide a prompt after the /gen command.
+    await ctx.reply(`\u274c Please provide a prompt after the /gen command.
 Example: /gen a beautiful sunset --ar 16:9 --s 28 --c 3.5 --l <trigger_word>:1.7
 
 Parameters:
@@ -181,7 +183,7 @@ Parameters:
 
     const userParams = user?.parameters?.params as Record<string, any> | null;
     const generationParams = await convertInlineToGenerationParams(params, userParams);
-    const processingMsg = await ctx.reply("🎨 Generating your art...");
+    const processingMsg = await ctx.reply("\ud83c\udfa8 Generating your art...");
 
     logger.info({ userParams: generationParams, prompt }, "Starting generation with parameters");
 
