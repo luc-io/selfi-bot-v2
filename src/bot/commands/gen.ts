@@ -191,11 +191,9 @@ Parameters:
       ...generationParams
     });
 
-    // Store the FAL seed and compressed seed for each image
     const imagesWithSeeds = response.images.map(img => ({
       ...img,
-      falSeed: img.seed,
-      seed: compressLongSeed(img.seed)
+      seed: compressLongSeed(response.seed)
     }));
 
     await ctx.api.deleteMessage(chatId, processingMsg.message_id);
