@@ -314,6 +314,7 @@ export async function trainingRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: 'Training not found' });
       }
 
+      const progress = trainingService.getTrainingProgress(training.loraId);
       const metadata = training.metadata as Prisma.JsonObject | null;
       const isTestMode = metadata ? Boolean(metadata.test_mode) : false;
 
@@ -321,14 +322,70 @@ export async function trainingRoutes(app: FastifyInstance) {
         trainingId: training.databaseId,
         loraId: training.loraId,
         status: training.lora.status,
+        progress: progress?.progress || 0,
+        message: progress?.message,
+        error: progress?.error || training.error,
+        estimatedTimeRemaining: progress?.estimatedTimeRemaining,
         metadata: training.metadata,
-        error: training.error,
         completedAt: training.completedAt,
         test_mode: isTestMode
       });
     } catch (error) {
       logger.error({ error }, 'Failed to get training status');
       const errorMessage = error instanceof Error ? error.message : 'Failed to get training status';
+      reply.status(500).send({ error: errorMessage });
+    }
+  });
+
+  // Cancel training
+  app.post('/training/:id/cancel', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const telegramId = request.headers['x-telegram-user-id'] as string;
+
+      if (!telegramId) {
+        return reply.status(400).send({ error: 'Missing user ID' });
+      }
+
+      const training = await prisma.training.findUnique({
+        where: { databaseId: id },
+        include: {
+          lora: true,
+          user: true
+        }
+      });
+
+      if (!training) {
+        return reply.status(404).send({ error: 'Training not found' });
+      }
+
+      // Check if user owns this training
+      if (training.user.telegramId !== telegramId) {
+        return reply.status(403).send({ error: 'Not authorized to cancel this training' });
+      }
+
+      // Check if training can be cancelled
+      if (training.status !== TrainStatus.PROCESSING) {
+        return reply.status(400).send({ 
+          error: 'Training cannot be cancelled in its current state',
+          status: training.status
+        });
+      }
+
+      const cancelled = await trainingService.cancelTraining(training.loraId);
+      if (!cancelled) {
+        return reply.status(400).send({ error: 'Failed to cancel training' });
+      }
+
+      return reply.send({ 
+        message: 'Training cancelled successfully',
+        trainingId: training.databaseId,
+        loraId: training.loraId
+      });
+
+    } catch (error) {
+      logger.error({ error }, 'Failed to cancel training');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to cancel training';
       reply.status(500).send({ error: errorMessage });
     }
   });
