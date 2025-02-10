@@ -1,9 +1,17 @@
 import { FastifyPluginAsync } from 'fastify';
 import { prisma } from '../../lib/prisma.js';
+import { logger } from '../../lib/logger.js';
 
 export const imagesRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/images', {
     schema: {
+      headers: {
+        type: 'object',
+        required: ['x-telegram-user-id'],
+        properties: {
+          'x-telegram-user-id': { type: 'string' }
+        }
+      },
       querystring: {
         type: 'object',
         properties: {
@@ -12,57 +20,80 @@ export const imagesRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
     },
-    handler: async (request) => {
-      const { userId } = request;
-      if (!userId) throw new Error('User not found');
+    handler: async (request, reply) => {
+      try {
+        const telegramId = request.headers['x-telegram-user-id'] as string;
+        const { page = 1, limit = 10 } = request.query as { page?: number; limit?: number };
+        const skip = (page - 1) * limit;
 
-      const { page = 1, limit = 10 } = request.query as { page?: number; limit?: number };
-      const skip = (page - 1) * limit;
+        // Find user by telegram ID
+        const user = await prisma.user.findUnique({
+          where: { telegramId },
+          select: { databaseId: true }
+        });
 
-      const [generations, total] = await Promise.all([
-        prisma.generation.findMany({
-          where: {
-            userDatabaseId: userId,
+        if (!user) {
+          return reply.status(404).send({ error: 'User not found' });
+        }
+
+        const [generations, total] = await Promise.all([
+          prisma.generation.findMany({
+            where: {
+              userDatabaseId: user.databaseId,
+            },
+            orderBy: {
+              createdAt: 'desc'
+            },
+            take: limit,
+            skip,
+            include: {
+              baseModel: true,
+              lora: true
+            }
+          }),
+          prisma.generation.count({
+            where: {
+              userDatabaseId: user.databaseId,
+            }
+          })
+        ]);
+
+        const images = generations.map(gen => ({
+          id: gen.databaseId,
+          url: gen.imageUrl,
+          prompt: gen.prompt,
+          seed: gen.seed ? Number(gen.seed) : undefined,
+          createdAt: gen.createdAt.toISOString(),
+          hasNsfw: false, // TODO: Add NSFW detection if implemented
+          params: {
+            ...(gen.metadata as Record<string, unknown> || {}),
+            modelPath: gen.baseModel.modelPath,
           },
-          orderBy: {
-            createdAt: 'desc'
-          },
-          take: limit,
-          skip,
-          include: {
-            baseModel: true,
-            lora: true
-          }
-        }),
-        prisma.generation.count({
-          where: {
-            userDatabaseId: userId,
-          }
-        })
-      ]);
+          loras: gen.lora ? [{
+            path: gen.lora.databaseId,
+            scale: (gen.metadata as Record<string, unknown> || {}).loraScale as number || 1
+          }] : [],
+        }));
 
-      const images = generations.map(gen => ({
-        id: gen.databaseId,
-        url: gen.imageUrl,
-        prompt: gen.prompt,
-        seed: gen.seed ? Number(gen.seed) : undefined,
-        createdAt: gen.createdAt.toISOString(),
-        hasNsfw: false, // TODO: Add NSFW detection if implemented
-        params: {
-          ...(gen.metadata as Record<string, unknown> || {}),
-          modelPath: gen.baseModel.modelPath,
-        },
-        loras: gen.lora ? [{
-          path: gen.lora.databaseId,
-          scale: (gen.metadata as Record<string, unknown> || {}).loraScale as number || 1
-        }] : [],
-      }));
+        logger.info({
+          userDatabaseId: user.databaseId,
+          page,
+          limit,
+          count: images.length,
+          total
+        }, 'Fetched user generated images');
 
-      return {
-        images,
-        total,
-        hasMore: total > skip + generations.length
-      };
+        return {
+          images,
+          total,
+          hasMore: total > skip + generations.length
+        };
+      } catch (error) {
+        logger.error({ error }, 'Failed to fetch user images');
+        return reply.status(500).send({ error: 'Failed to fetch user images' });
+      }
     }
   });
+
+  logger.info('Images routes registered');
 };
