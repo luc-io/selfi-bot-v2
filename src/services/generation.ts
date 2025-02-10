@@ -155,6 +155,7 @@ export async function generateImage(params: GenerateImageParams & { telegramId: 
         loraScale: params.loras?.[0]?.scale
       };
 
+      // Convert the seed to string to avoid BigInt issues
       const savedImage = await prisma.generation.create({
         data: {
           userDatabaseId: user.databaseId,
@@ -162,7 +163,7 @@ export async function generateImage(params: GenerateImageParams & { telegramId: 
           loraId: firstLoraId, // Use first LoRA if present
           prompt: params.prompt,
           imageUrl: img.url,
-          seed: BigInt(result.data.seed),
+          seed: result.data.seed.toString(), // Convert to string
           starsUsed: requiredStars / numImages, // Stars per image
           metadata: metadata
         }
