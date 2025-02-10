@@ -8,6 +8,87 @@ import { logger } from "../../lib/logger.js";
 
 const composer = new Composer<BotContext>();
 
+interface InlineParams {
+  ar?: string;
+  s?: number;
+  c?: number;
+  seed?: number;
+  n?: number;
+  l?: string;
+}
+
+function parseInlineParams(text: string): { prompt: string; params: InlineParams } {
+  const parts = text.split(/\s+--/);
+  const prompt = parts[0].split(/\/gen\s*/)[1]?.trim();
+  const params: InlineParams = {};
+
+  for (let i = 1; i < parts.length; i++) {
+    const [key, value] = parts[i].split(/\s+/);
+    switch (key) {
+      case 'ar':
+        params.ar = value;
+        break;
+      case 's':
+        params.s = parseInt(value);
+        break;
+      case 'c':
+        params.c = parseFloat(value);
+        break;
+      case 'seed':
+        params.seed = parseInt(value);
+        break;
+      case 'n':
+        params.n = parseInt(value);
+        break;
+      case 'l':
+        params.l = value;
+        break;
+    }
+  }
+
+  return { prompt, params };
+}
+
+function convertInlineToGenerationParams(
+  inlineParams: InlineParams,
+  userParams: Record<string, any> | null
+) {
+  const baseParams = {
+    imageSize: userParams?.image_size,
+    numInferenceSteps: userParams?.num_inference_steps,
+    guidanceScale: userParams?.guidance_scale,
+    numImages: userParams?.num_images,
+    enableSafetyChecker: userParams?.enable_safety_checker,
+    outputFormat: userParams?.output_format as 'jpeg' | 'png' | undefined,
+    loras: userParams?.loras
+  };
+
+  // Override with inline parameters if provided
+  if (inlineParams.ar) {
+    const [width, height] = inlineParams.ar.split(':');
+    if (width === '16' && height === '9') {
+      baseParams.imageSize = 'portrait_16_9';
+    } else if (width === '1' && height === '1') {
+      baseParams.imageSize = 'square';
+    }
+  }
+
+  if (inlineParams.s) baseParams.numInferenceSteps = inlineParams.s;
+  if (inlineParams.c) baseParams.guidanceScale = inlineParams.c;
+  if (inlineParams.seed) baseParams.seed = inlineParams.seed;
+  if (inlineParams.n) baseParams.numImages = inlineParams.n;
+
+  if (inlineParams.l) {
+    const [loraId, scale] = inlineParams.l.split(':');
+    baseParams.loras = [{
+      path: loraId,
+      scale: parseFloat(scale) || 1
+    }];
+  }
+
+  return baseParams;
+}
+
 // Store the last processed command for each chat
 const lastProcessed = new Map<number, { msgId: number; timestamp: number }>();
 
@@ -17,12 +98,12 @@ composer.command("gen", hasSubscription, async (ctx) => {
     return;
   }
 
-  // Extract prompt - everything after /gen
-  const prompt = ctx.message.text.split(/\/gen\s*/)[1]?.trim();
+  // Parse inline parameters
+  const { prompt, params } = parseInlineParams(ctx.message.text);
   
   // Check for empty or missing prompt
   if (!prompt) {
-    await ctx.reply("❌ Please provide a prompt after the /gen command.\nExample: /gen a beautiful sunset");
+    await ctx.reply("❌ Please provide a prompt after the /gen command.\nExample: /gen a beautiful sunset --ar 16:9 --s 28 --c 3.5");
     return;
   }
 
@@ -75,7 +156,8 @@ composer.command("gen", hasSubscription, async (ctx) => {
     logger.info({
       messageId,
       chatId,
-      command: ctx.message.text
+      command: ctx.message.text,
+      parsedParams: params
     }, "Starting generation command");
 
     const user = await prisma.user.findUnique({
@@ -83,32 +165,21 @@ composer.command("gen", hasSubscription, async (ctx) => {
       include: { parameters: true }
     });
 
-    const userParams = user?.parameters?.params as {
-      image_size?: string;
-      num_inference_steps?: number;
-      guidance_scale?: number;
-      num_images?: number;
-      enable_safety_checker?: boolean;
-      output_format?: string;
-      loras?: { path: string; scale: number }[];
-    } | null;
+    const userParams = user?.parameters?.params as Record<string, any> | null;
+
+    // Convert inline parameters to generation parameters
+    const generationParams = convertInlineToGenerationParams(params, userParams);
 
     // Send a "processing" message
     const processingMsg = await ctx.reply("🎨 Generating your art...");
 
     // Log user parameters including LoRAs
-    logger.info({ userParams, prompt }, "Starting generation with parameters");
+    logger.info({ userParams: generationParams, prompt }, "Starting generation with parameters");
 
     const response = await generateImage({
       telegramId: ctx.from.id.toString(),
       prompt,
-      imageSize: userParams?.image_size,
-      numInferenceSteps: userParams?.num_inference_steps,
-      guidanceScale: userParams?.guidance_scale,
-      numImages: userParams?.num_images,
-      enableSafetyChecker: userParams?.enable_safety_checker,
-      outputFormat: userParams?.output_format as 'jpeg' | 'png' | undefined,
-      loras: userParams?.loras  // Add LoRA parameters
+      ...generationParams
     });
 
     // Delete the processing message
