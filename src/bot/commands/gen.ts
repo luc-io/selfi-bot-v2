@@ -28,10 +28,22 @@ interface GenerationParams {
   seed?: number;
 }
 
+function normalizeCommandText(text: string): string {
+  // Replace em dash and en dash with double hyphen
+  return text.replace(/[—–]/g, '--');
+}
+
 function parseInlineParams(text: string): { prompt: string; params: InlineParams } {
-  const parts = text.split(/\s+--/);
+  const normalizedText = normalizeCommandText(text);
+  const parts = normalizedText.split(/\s+--/);
   const prompt = parts[0].split(/\/gen\s*/)[1]?.trim();
   const params: InlineParams = {};
+
+  logger.info({ 
+    originalText: text,
+    normalizedText,
+    parts 
+  }, 'Parsing inline parameters');
 
   for (let i = 1; i < parts.length; i++) {
     const [key, value] = parts[i].split(/\s+/);
@@ -82,6 +94,12 @@ function convertInlineToGenerationParams(
     } else if (width === '1' && height === '1') {
       baseParams.imageSize = 'square';
     }
+    logger.info({ 
+      ar: inlineParams.ar, 
+      width, 
+      height, 
+      resultSize: baseParams.imageSize 
+    }, 'Processed aspect ratio parameter');
   }
 
   if (inlineParams.s) baseParams.numInferenceSteps = inlineParams.s;
