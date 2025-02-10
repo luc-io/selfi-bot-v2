@@ -7,12 +7,11 @@ import { StarsService } from '../../services/stars.js';
 const composer = new Composer<BotContext>();
 
 const starPacks = [
-  [20, 20],   // 20 stars for 20 XTR
-  [50, 50],   // 50 stars for 50 XTR
-  [100, 100], // 100 stars for 100 XTR
-  [250, 250], // 250 stars for 250 XTR
-  [500, 500], // 500 stars for 500 XTR
-  [1000, 1000] // 1000 stars for 1000 XTR
+  [50, 50],     // 50 stars for 50 XTR
+  [100, 100],   // 100 stars for 100 XTR
+  [200, 200],   // 200 stars for 200 XTR
+  [500, 500],   // 500 stars for 500 XTR
+  [1000, 1000]  // 1000 stars for 1000 XTR
 ] as const;
 
 composer.command('stars', async (ctx) => {
@@ -35,16 +34,9 @@ composer.command('stars', async (ctx) => {
       ]))
     };
 
-    const recentTransactions = balance.starTransactions
-      .map(t => `${t.type}: ${t.amount > 0 ? '+' : ''}${t.amount} ⭐`)
-      .join('\n');
-
     await ctx.reply(
       `You have ${balance.stars} ⭐\n\n` +
-      `Total spent: ${balance.totalSpentStars} ⭐\n` +
-      `Total bought: ${balance.totalBoughtStars} ⭐\n\n` +
-      `Recent transactions:\n${recentTransactions}\n\n` +
-      `Each image generation costs 1 ⭐\nEach training costs 150 ⭐\n\nBuy more stars:`,
+      `Each image generation costs 3 ⭐\nEach training costs 150 ⭐\n\nBuy more stars:`,
       { reply_markup: inlineKeyboard }
     );
   } catch (error) {
