@@ -8,25 +8,139 @@ import { logger } from "../../lib/logger.js";
 
 const composer = new Composer<BotContext>();
 
+interface InlineParams {
+  ar?: string;
+  s?: number;
+  c?: number;
+  seed?: number;
+  n?: number;
+  l?: string;
+}
+
+interface GenerationParams {
+  imageSize?: string;
+  numInferenceSteps?: number;
+  guidanceScale?: number;
+  numImages?: number;
+  enableSafetyChecker?: boolean;
+  outputFormat?: 'jpeg' | 'png';
+  loras?: { path: string; scale: number }[];
+  seed?: number;
+}
+
+function normalizeCommandText(text: string): string {
+  return text.replace(/[—–]/g, '--');
+}
+
+function parseInlineParams(text: string): { prompt: string; params: InlineParams } {
+  const normalizedText = normalizeCommandText(text);
+  const parts = normalizedText.split(/\s+--/);
+  const prompt = parts[0].split(/\/gen\s*/)[1]?.trim();
+  const params: InlineParams = {};
+
+  logger.info({ originalText: text, normalizedText, parts }, 'Parsing inline parameters');
+
+  for (let i = 1; i < parts.length; i++) {
+    const [key, value] = parts[i].split(/\s+/);
+    switch (key) {
+      case 'ar':
+        params.ar = value;
+        break;
+      case 's':
+        params.s = parseInt(value);
+        break;
+      case 'c':
+        params.c = parseFloat(value);
+        break;
+      case 'seed':
+        params.seed = parseInt(value);
+        break;
+      case 'n':
+        params.n = parseInt(value);
+        break;
+      case 'l':
+        params.l = value;
+        break;
+    }
+  }
+
+  return { prompt, params };
+}
+
+async function convertInlineToGenerationParams(
+  inlineParams: InlineParams,
+  userParams: Record<string, any> | null
+): Promise<GenerationParams> {
+  const baseParams: GenerationParams = {
+    imageSize: userParams?.image_size,
+    numInferenceSteps: userParams?.num_inference_steps,
+    guidanceScale: userParams?.guidance_scale,
+    numImages: userParams?.num_images,
+    enableSafetyChecker: userParams?.enable_safety_checker,
+    outputFormat: userParams?.output_format as 'jpeg' | 'png' | undefined,
+    loras: userParams?.loras,
+    seed: undefined
+  };
+
+  if (inlineParams.ar) {
+    const [width, height] = inlineParams.ar.split(':');
+    if (width === '16' && height === '9') {
+      baseParams.imageSize = 'portrait_16_9';
+    } else if (width === '1' && height === '1') {
+      baseParams.imageSize = 'square';
+    }
+    logger.info({ ar: inlineParams.ar, width, height, resultSize: baseParams.imageSize }, 'Processed aspect ratio parameter');
+  }
+
+  if (inlineParams.s) baseParams.numInferenceSteps = inlineParams.s;
+  if (inlineParams.c) baseParams.guidanceScale = inlineParams.c;
+  if (inlineParams.seed) baseParams.seed = inlineParams.seed;
+  if (inlineParams.n) baseParams.numImages = inlineParams.n;
+
+  if (inlineParams.l) {
+    const [triggerWord, scale] = inlineParams.l.split(':');
+    // Find LoRA by trigger word
+    const lora = await prisma.loraModel.findFirst({
+      where: { triggerWord },
+      select: { databaseId: true }
+    });
+
+    if (lora) {
+      baseParams.loras = [{
+        path: lora.databaseId,
+        scale: parseFloat(scale) || 1
+      }];
+      logger.info({ triggerWord, loraId: lora.databaseId, scale }, 'Found LoRA by trigger word');
+    } else {
+      logger.warn({ triggerWord }, 'LoRA not found by trigger word');
+    }
+  }
+
+  return baseParams;
+}
+
 // Store the last processed command for each chat
 const lastProcessed = new Map<number, { msgId: number; timestamp: number }>();
 
 composer.command("gen", hasSubscription, async (ctx) => {
-  // Ensure this is a text message with the command
-  if (!ctx.message?.text) {
-    return;
-  }
+  if (!ctx.message?.text) return;
 
-  // Extract prompt - everything after /gen
-  const prompt = ctx.message.text.split(/\/gen\s*/)[1]?.trim();
+  const { prompt, params } = parseInlineParams(ctx.message.text);
   
-  // Check for empty or missing prompt
   if (!prompt) {
-    await ctx.reply("❌ Please provide a prompt after the /gen command.\nExample: /gen a beautiful sunset");
+    await ctx.reply(`❌ Please provide a prompt after the /gen command.
+Example: /gen a beautiful sunset --ar 16:9 --s 28 --c 3.5 --l <trigger_word>:1.7
+
+Parameters:
+--ar: Aspect ratio (16:9, 1:1)
+--s: Steps (default: 28)
+--c: CFG Scale (default: 3.5)
+--seed: Seed value
+--n: Number of images
+--l: LoRA trigger word and scale (format: trigger_word:1.7)`);
     return;
   }
 
-  // Ensure we have a valid user
   if (!ctx.from?.id) {
     await ctx.reply("Could not identify user");
     return;
@@ -36,34 +150,20 @@ composer.command("gen", hasSubscription, async (ctx) => {
   const messageId = ctx.message.message_id;
   const now = Date.now();
 
-  // Check if we've recently processed a command from this chat
   const last = lastProcessed.get(chatId);
   if (last) {
     if (messageId === last.msgId) {
-      logger.info({
-        chatId,
-        messageId,
-        lastMsgId: last.msgId,
-        timeDiff: now - last.timestamp
-      }, "Skipping duplicate command");
+      logger.info({ chatId, messageId, lastMsgId: last.msgId, timeDiff: now - last.timestamp }, "Skipping duplicate command");
       return;
     }
-    // If it's a new message but within 5 seconds, ignore it
     if (now - last.timestamp < 5000) {
-      logger.info({
-        chatId,
-        messageId,
-        lastMsgId: last.msgId,
-        timeDiff: now - last.timestamp
-      }, "Command too soon after last one");
+      logger.info({ chatId, messageId, lastMsgId: last.msgId, timeDiff: now - last.timestamp }, "Command too soon after last one");
       return;
     }
   }
 
-  // Update last processed command
   lastProcessed.set(chatId, { msgId: messageId, timestamp: now });
 
-  // Clear old entries every minute
   setTimeout(() => {
     const entry = lastProcessed.get(chatId);
     if (entry?.msgId === messageId) {
@@ -72,72 +172,40 @@ composer.command("gen", hasSubscription, async (ctx) => {
   }, 60000);
 
   try {
-    logger.info({
-      messageId,
-      chatId,
-      command: ctx.message.text
-    }, "Starting generation command");
+    logger.info({ messageId, chatId, command: ctx.message.text, parsedParams: params }, "Starting generation command");
 
     const user = await prisma.user.findUnique({
       where: { telegramId: ctx.from.id.toString() },
       include: { parameters: true }
     });
 
-    const userParams = user?.parameters?.params as {
-      image_size?: string;
-      num_inference_steps?: number;
-      guidance_scale?: number;
-      num_images?: number;
-      enable_safety_checker?: boolean;
-      output_format?: string;
-      loras?: { path: string; scale: number }[];
-    } | null;
-
-    // Send a "processing" message
+    const userParams = user?.parameters?.params as Record<string, any> | null;
+    const generationParams = await convertInlineToGenerationParams(params, userParams);
     const processingMsg = await ctx.reply("🎨 Generating your art...");
 
-    // Log user parameters including LoRAs
-    logger.info({ userParams, prompt }, "Starting generation with parameters");
+    logger.info({ userParams: generationParams, prompt }, "Starting generation with parameters");
 
     const response = await generateImage({
       telegramId: ctx.from.id.toString(),
       prompt,
-      imageSize: userParams?.image_size,
-      numInferenceSteps: userParams?.num_inference_steps,
-      guidanceScale: userParams?.guidance_scale,
-      numImages: userParams?.num_images,
-      enableSafetyChecker: userParams?.enable_safety_checker,
-      outputFormat: userParams?.output_format as 'jpeg' | 'png' | undefined,
-      loras: userParams?.loras  // Add LoRA parameters
+      ...generationParams
     });
 
-    // Delete the processing message
     await ctx.api.deleteMessage(chatId, processingMsg.message_id);
 
-    // If there is only one image, use replyWithPhoto
     if (response.images.length === 1) {
       await ctx.replyWithPhoto(response.images[0].url);
-    } 
-    // If there are multiple images, use sendMediaGroup
-    else {
+    } else {
       const mediaGroup = response.images.map(image => 
         InputMediaBuilder.photo(image.url)
       );
       await ctx.replyWithMediaGroup(mediaGroup);
     }
 
-    logger.info({
-      messageId,
-      chatId,
-      imagesCount: response.images.length
-    }, "Generation command completed successfully");
+    logger.info({ messageId, chatId, imagesCount: response.images.length }, "Generation command completed successfully");
 
   } catch (error) {
-    logger.error({
-      messageId,
-      chatId,
-      error
-    }, "Generation command failed");
+    logger.error({ messageId, chatId, error }, "Generation command failed");
     handleError(ctx, error);
   }
 });
