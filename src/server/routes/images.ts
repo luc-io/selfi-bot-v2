@@ -3,7 +3,7 @@ import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
 
 export const imagesRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get('/images', {
+  fastify.get('/', {
     schema: {
       headers: {
         type: 'object',
