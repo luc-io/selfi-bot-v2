@@ -5,7 +5,7 @@ import { handleError } from "../../utils/error.js";
 import { BotContext } from "../../types/bot.js";
 import { prisma } from "../../lib/prisma.js";
 import { logger } from "../../lib/logger.js";
-import { compressLongSeed, generateFalSeed } from "../../utils/seed.js";
+import { compressLongSeed, generateFalSeed, expandCompressedSeed } from "../../utils/seed.js";
 
 const composer = new Composer<BotContext>();
 const MAX_SEED = 9999999;
@@ -56,7 +56,8 @@ function parseInlineParams(text: string): { prompt: string; params: InlineParams
         break;
       case 'seed':
         const seedValue = parseInt(value);
-        params.seed = seedValue <= MAX_SEED ? seedValue : seedValue % MAX_SEED;
+        // If it's a compressed seed, expand it
+        params.seed = expandCompressedSeed(seedValue);
         break;
       case 'n':
         params.n = parseInt(value);
