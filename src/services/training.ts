@@ -2,6 +2,7 @@ import { fal } from "@fal-ai/client";
 import { logger } from '../lib/logger.js';
 import { StarsService } from './stars.js';
 import { prisma } from '../lib/prisma.js';
+import { LoraStatus, TrainStatus } from '@prisma/client';
 import EventEmitter from 'events';
 
 interface FalFile {
@@ -254,12 +255,12 @@ export class TrainingService extends EventEmitter {
       await prisma.$transaction([
         prisma.loraModel.update({
           where: { databaseId: requestId },
-          data: { status: 'CANCELLED' }
+          data: { status: LoraStatus.CANCELLED }
         }),
         prisma.training.update({
           where: { databaseId: requestId },
           data: { 
-            status: 'CANCELLED',
+            status: TrainStatus.CANCELLED,
             completedAt: new Date()
           }
         })
