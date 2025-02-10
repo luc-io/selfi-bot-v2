@@ -5,6 +5,7 @@ import { handleError } from "../../utils/error.js";
 import { BotContext } from "../../types/bot.js";
 import { prisma } from "../../lib/prisma.js";
 import { logger } from "../../lib/logger.js";
+import { compressLongSeed, generateFalSeed } from "../../utils/seed.js";
 
 const composer = new Composer<BotContext>();
 
@@ -34,14 +35,14 @@ function normalizeCommandText(text: string): string {
 
 function parseInlineParams(text: string): { prompt: string; params: InlineParams } {
   const normalizedText = normalizeCommandText(text);
-  const parts = normalizedText.split(/\s+--/);
-  const prompt = parts[0].split(/\/gen\s*/)[1]?.trim();
+  const parts = normalizedText.split(/\\s+--/);
+  const prompt = parts[0].split(/\\/gen\\s*/)[1]?.trim();
   const params: InlineParams = {};
 
   logger.info({ originalText: text, normalizedText, parts }, 'Parsing inline parameters');
 
   for (let i = 1; i < parts.length; i++) {
-    const [key, value] = parts[i].split(/\s+/);
+    const [key, value] = parts[i].split(/\\s+/);
     switch (key) {
       case 'ar':
         params.ar = value;
@@ -79,7 +80,7 @@ async function convertInlineToGenerationParams(
     enableSafetyChecker: userParams?.enable_safety_checker,
     outputFormat: userParams?.output_format as 'jpeg' | 'png' | undefined,
     loras: userParams?.loras,
-    seed: undefined
+    seed: inlineParams.seed || generateFalSeed()
   };
 
   if (inlineParams.ar) {
@@ -94,7 +95,6 @@ async function convertInlineToGenerationParams(
 
   if (inlineParams.s) baseParams.numInferenceSteps = inlineParams.s;
   if (inlineParams.c) baseParams.guidanceScale = inlineParams.c;
-  if (inlineParams.seed) baseParams.seed = inlineParams.seed;
   if (inlineParams.n) baseParams.numImages = inlineParams.n;
 
   if (inlineParams.l) {
@@ -135,7 +135,7 @@ Parameters:
 --ar: Aspect ratio (16:9, 1:1)
 --s: Steps (default: 28)
 --c: CFG Scale (default: 3.5)
---seed: Seed value
+--seed: Seed value (7 digits max)
 --n: Number of images
 --l: LoRA trigger word and scale (format: trigger_word:1.7)`);
     return;
@@ -191,12 +191,19 @@ Parameters:
       ...generationParams
     });
 
+    // Store the FAL seed and compressed seed for each image
+    const imagesWithSeeds = response.images.map(img => ({
+      ...img,
+      falSeed: img.seed,
+      seed: compressLongSeed(img.seed)
+    }));
+
     await ctx.api.deleteMessage(chatId, processingMsg.message_id);
 
-    if (response.images.length === 1) {
-      await ctx.replyWithPhoto(response.images[0].url);
+    if (imagesWithSeeds.length === 1) {
+      await ctx.replyWithPhoto(imagesWithSeeds[0].url);
     } else {
-      const mediaGroup = response.images.map(image => 
+      const mediaGroup = imagesWithSeeds.map(image => 
         InputMediaBuilder.photo(image.url)
       );
       await ctx.replyWithMediaGroup(mediaGroup);
