@@ -1,28 +1,23 @@
 import { PrismaClient } from '@prisma/client';
-import { MODELS } from '../src/config/models';
-
 const prisma = new PrismaClient();
 
 async function main() {
-  // Clear existing models
-  await prisma.baseModel.deleteMany();
+  // Ensure the base model exists
+  await prisma.baseModel.upsert({
+    where: { modelPath: 'fal-ai/flux-lora' },
+    update: {},
+    create: {
+      modelPath: 'fal-ai/flux-lora',
+      costPerGeneration: 3,
+    },
+  });
 
-  // Add models from config
-  for (const [modelPath, config] of Object.entries(MODELS)) {
-    await prisma.baseModel.create({
-      data: {
-        modelPath,
-        costPerGeneration: config.cost
-      }
-    });
-  }
-
-  console.log('Seed completed');
+  console.log('Database seeded successfully');
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    console.error('Error seeding database:', e);
     process.exit(1);
   })
   .finally(async () => {
