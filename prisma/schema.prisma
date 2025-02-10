@@ -139,6 +139,7 @@ enum LoraStatus {
   TRAINING
   COMPLETED
   FAILED
+  CANCELLED
 }
 
 enum TrainStatus {
@@ -146,6 +147,7 @@ enum TrainStatus {
   PROCESSING
   COMPLETED
   FAILED
+  CANCELLED
 }
 
 enum TransactionType {
