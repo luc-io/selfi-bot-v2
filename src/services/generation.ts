@@ -36,14 +36,14 @@ fal.config({
 export async function generateImage(params: GenerateImageParams & { telegramId: string }): Promise<GenerationResponse> {
   logger.info({ params }, 'Starting image generation with params');
 
-  // Calculate required stars (1 star per image)
+  // Calculate required stars (3 stars per image)
   const numImages = params.numImages ?? 1;
-  const requiredStars = numImages;
+  const requiredStars = numImages * 3;
 
   // Check if user has enough stars
   const hasEnoughStars = await StarsService.checkBalance(params.telegramId, requiredStars);
   if (!hasEnoughStars) {
-    throw new Error(`Insufficient stars. Required: ${requiredStars} stars for ${numImages} images`);
+    throw new Error(`Insufficient stars. Required: ${requiredStars} stars for ${numImages} image${numImages > 1 ? 's' : ''} (3 stars each)`);
   }
   
   const requestParams: FalRequestParams = {

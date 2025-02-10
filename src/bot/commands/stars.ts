@@ -44,7 +44,7 @@ composer.command('stars', async (ctx) => {
       `Total spent: ${balance.totalSpentStars} ⭐\n` +
       `Total bought: ${balance.totalBoughtStars} ⭐\n\n` +
       `Recent transactions:\n${recentTransactions}\n\n` +
-      `Each image generation costs 1 ⭐\nEach training costs 150 ⭐\n\nBuy more stars:`,
+      `Each image generation costs 3 ⭐\nEach training costs 150 ⭐\n\nBuy more stars:`,
       { reply_markup: inlineKeyboard }
     );
   } catch (error) {

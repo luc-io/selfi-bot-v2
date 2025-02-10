@@ -62,7 +62,7 @@ You currently have <b>${user.stars} ⭐ stars</b>
 • /balance - Check your balance
 • /help - View all commands
 
-💫 <i>Each image generation costs 1 star. Use /stars to get started!</i>
+💫 <i>Each image generation costs 3 stars. Use /stars to get started!</i>
 
 Need help? Use /help to learn more about all features.`;
 
