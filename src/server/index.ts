@@ -7,6 +7,7 @@ import { paramsRoutes } from './routes/params.js';
 import { loraRoutes } from './routes/loras.js';
 import { trainingRoutes } from './routes/training.js';
 import { userRoutes } from './routes/user.js';
+import { imagesRoutes } from './routes/images.js';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 
@@ -52,6 +53,7 @@ export async function setupServer(server: FastifyInstance, bot: Bot<BotContext>)
   await server.register(paramsRoutes, { prefix: '/api' });
   await server.register(loraRoutes, { prefix: '/api' });
   await server.register(trainingRoutes, { prefix: '/api' });
+  await server.register(imagesRoutes, { prefix: '/api' });
   await server.register(userRoutes);
   logger.info('API routes configured');
 
