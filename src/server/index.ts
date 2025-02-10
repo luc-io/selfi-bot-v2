@@ -65,14 +65,9 @@ export async function setupServer(server: FastifyInstance, bot: Bot<BotContext>)
     await server.register(userRoutes);
     logger.info('User routes registered');
 
-    // Log all registered routes
-    server.routes.forEach(route => {
-      logger.info({
-        method: route.method,
-        url: route.url,
-        prefix: route.prefix
-      }, 'Registered route');
-    });
+    // Log registered routes
+    const registeredRoutes = server.printRoutes();
+    logger.info({ routes: registeredRoutes }, 'Registered routes');
   } catch (error) {
     logger.error({ error }, 'Failed to register routes');
     throw error;
