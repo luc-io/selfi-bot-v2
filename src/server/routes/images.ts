@@ -83,6 +83,8 @@ const imagesRoutes: FastifyPluginAsync = async (fastify) => {
           },
           loras: gen.lora ? [{
             path: gen.lora.databaseId,
+            name: gen.lora.name,
+            triggerWord: gen.lora.triggerWord,
             scale: (gen.metadata as Record<string, unknown> || {}).loraScale as number || 1
           }] : [],
         }));
