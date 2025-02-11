@@ -53,6 +53,7 @@ export interface TrainingProgress {
 }
 
 export interface TrainingResult {
+  requestId: string;
   weights: {
     url: string;
     fileName: string;
@@ -104,6 +105,7 @@ export class TrainingService {
     const baseUrl = `https://test-url/TEST_${testId}`;
 
     return {
+      requestId: `test_${testId}`,
       weights: {
         url: `${baseUrl}_${trigger_word}_weights.safetensors`,
         fileName: `${trigger_word}_weights.safetensors`,
@@ -140,7 +142,7 @@ export class TrainingService {
         .find((msg) => msg?.includes('progress'));
 
       if (progressLog) {
-        const match = progressLog.match(/(\\d+)%/);
+        const match = progressLog.match(/(\d+)%/);
         if (match) {
           progress = parseInt(match[1]);
         }
@@ -270,6 +272,7 @@ export class TrainingService {
       }
 
       const trainingResult = {
+        requestId: result.requestId,
         weights: this.convertFileToJson(result.data.diffusers_lora_file),
         config: this.convertFileToJson(result.data.config_file)
       };
