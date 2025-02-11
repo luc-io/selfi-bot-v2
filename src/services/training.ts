@@ -2,6 +2,7 @@ import { fal } from "@fal-ai/client";
 import { logger } from '../lib/logger.js';
 import { StarsService } from './stars.js';
 import { prisma } from '../lib/prisma.js';
+import { TrainStatus } from '@prisma/client';
 
 interface FalFile {
   url: string;
@@ -68,11 +69,17 @@ export interface TrainingResult {
   };
 }
 
+const STANDARD_MESSAGES = {
+  PENDING: 'Initializing training...',
+  PROCESSING: 'Training in progress...',
+  COMPLETED: 'Training completed successfully',
+  FAILED: (error: string) => `Training failed: ${error}`
+};
+
 if (!process.env.FAL_KEY) {
   throw new Error('FAL_KEY environment variable is not set');
 }
 
-// Now TypeScript knows FAL_KEY is not undefined
 const credentials = process.env.FAL_KEY;
 
 export class TrainingService {
@@ -134,7 +141,8 @@ export class TrainingService {
     try {
       // Update progress based on logs
       let progress = 0;
-      let message = 'Processing...';
+      let message = STANDARD_MESSAGES.PROCESSING;
+      let currentStatus: TrainingProgress['status'] = 'training';
 
       // Find progress message
       const progressLog = update.logs
@@ -157,16 +165,16 @@ export class TrainingService {
         message = lastValidMessage.message;
       }
 
-      // Update status
-      let currentStatus: TrainingProgress['status'] = 'training';
-      
+      // Update status based on FAL response
       if (update.status === 'COMPLETED') {
         currentStatus = 'completed';
         progress = 100;
-        message = 'Training completed successfully';
+        message = STANDARD_MESSAGES.COMPLETED;
       } else if (update.status === 'FAILED') {
         currentStatus = 'failed';
-        message = 'Training failed';
+        // Use last log message as error if available
+        const errorMessage = lastValidMessage?.message || 'Unknown error';
+        message = STANDARD_MESSAGES.FAILED(errorMessage);
       }
 
       // Update training status in memory
@@ -183,11 +191,11 @@ export class TrainingService {
 
       if (training) {
         if (currentStatus === 'completed' || currentStatus === 'failed') {
-          // If training is complete or failed, update the status
+          // Update training record
           await prisma.training.update({
             where: { databaseId: training.databaseId },
             data: {
-              status: currentStatus === 'completed' ? 'COMPLETED' : 'FAILED',
+              status: currentStatus === 'completed' ? TrainStatus.COMPLETED : TrainStatus.FAILED,
               completedAt: currentStatus === 'completed' ? new Date() : null,
               error: currentStatus === 'failed' ? message : null
             }
@@ -219,6 +227,13 @@ export class TrainingService {
         requestId,
         updateData: update 
       }, 'Error processing training update');
+
+      // Even if there's an error updating the database, maintain the in-memory status
+      this.activeTrainings.set(requestId, {
+        status: 'failed',
+        progress: 0,
+        message: STANDARD_MESSAGES.FAILED(error instanceof Error ? error.message : 'Internal error')
+      });
     }
   }
 
@@ -300,7 +315,7 @@ export class TrainingService {
             where: { databaseId: training.databaseId },
             data: {
               starsSpent: this.TRAINING_COST,
-              status: 'COMPLETED',
+              status: TrainStatus.COMPLETED,
               completedAt: new Date()
             }
           });
