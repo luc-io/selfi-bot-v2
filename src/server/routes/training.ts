@@ -298,7 +298,7 @@ export async function trainingRoutes(app: FastifyInstance) {
     }
   });
 
-  // Get training status by training ID
+  // Get training status by training ID with progress information
   app.get('/training/:id/status', async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
@@ -317,14 +317,33 @@ export async function trainingRoutes(app: FastifyInstance) {
       const metadata = training.metadata as Prisma.JsonObject | null;
       const isTestMode = metadata ? Boolean(metadata.test_mode) : false;
 
+      // Get real-time progress from training service
+      const progress = trainingService.getTrainingProgress(training.loraId);
+
+      let status = training.status;
+      // If we have progress info and it indicates completion/failure, update status
+      if (progress) {
+        if (progress.status === 'completed') {
+          status = TrainStatus.COMPLETED;
+        } else if (progress.status === 'failed') {
+          status = TrainStatus.FAILED;
+        }
+      }
+
       return reply.send({
         trainingId: training.databaseId,
         loraId: training.loraId,
         status: training.lora.status,
+        trainingStatus: status,
         metadata: training.metadata,
         error: training.error,
         completedAt: training.completedAt,
-        test_mode: isTestMode
+        test_mode: isTestMode,
+        progress: progress ? {
+          status: progress.status,
+          progress: progress.progress,
+          message: progress.message
+        } : null
       });
     } catch (error) {
       logger.error({ error }, 'Failed to get training status');
