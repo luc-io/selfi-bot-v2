@@ -190,9 +190,11 @@ export async function trainingRoutes(app: FastifyInstance) {
               baseModel: { connect: { modelPath: 'fal-ai/flux-lora-fast-training' } },
               instancePrompt: params.trigger_word,
               steps: params.steps,
-              starsSpent: isTestMode ? 0 : 150, // Set to training cost
+              starsSpent: isTestMode ? 0 : 150,
               status: TrainStatus.PROCESSING,
-              metadata
+              metadata,
+              // Initialize falRequestId as null, will be updated after FAL request
+              falRequestId: null
             }
           });
 
@@ -232,6 +234,14 @@ export async function trainingRoutes(app: FastifyInstance) {
           is_style: params.is_style,
           create_masks: params.create_masks
         }, isTestMode);
+
+        // Store FAL request ID
+        await prisma.training.update({
+          where: { databaseId: training.databaseId },
+          data: { 
+            falRequestId: result.requestId
+          }
+        });
 
         // Convert result to a Prisma-compatible JSON object
         const trainingResult: Prisma.JsonObject = {
@@ -276,6 +286,7 @@ export async function trainingRoutes(app: FastifyInstance) {
         return reply.send({
           trainingId: training.databaseId,
           loraId: lora.databaseId,
+          falRequestId: result.requestId,
           test_mode: isTestMode
         });
 
@@ -317,22 +328,41 @@ export async function trainingRoutes(app: FastifyInstance) {
       const metadata = training.metadata as Prisma.JsonObject | null;
       const isTestMode = metadata ? Boolean(metadata.test_mode) : false;
 
-      // Get real-time progress from training service
-      const progress = trainingService.getTrainingProgress(training.loraId);
+      // Get real-time progress from training service using falRequestId
+      const progress = training.falRequestId ? 
+        trainingService.getTrainingProgress(training.falRequestId) : 
+        null;
 
       let status = training.status;
       // If we have progress info and it indicates completion/failure, update status
       if (progress) {
-        if (progress.status === 'completed') {
+        if (progress.status === 'completed' && status !== TrainStatus.COMPLETED) {
           status = TrainStatus.COMPLETED;
-        } else if (progress.status === 'failed') {
+          // Update the database record
+          await prisma.training.update({
+            where: { databaseId: id },
+            data: { 
+              status: TrainStatus.COMPLETED,
+              completedAt: new Date()
+            }
+          });
+        } else if (progress.status === 'failed' && status !== TrainStatus.FAILED) {
           status = TrainStatus.FAILED;
+          // Update the database record
+          await prisma.training.update({
+            where: { databaseId: id },
+            data: { 
+              status: TrainStatus.FAILED,
+              error: progress.message || 'Training failed'
+            }
+          });
         }
       }
 
       return reply.send({
         trainingId: training.databaseId,
         loraId: training.loraId,
+        falRequestId: training.falRequestId,
         status: training.lora.status,
         trainingStatus: status,
         metadata: training.metadata,

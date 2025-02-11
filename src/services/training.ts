@@ -2,6 +2,7 @@ import { fal } from "@fal-ai/client";
 import { logger } from '../lib/logger.js';
 import { StarsService } from './stars.js';
 import { prisma } from '../lib/prisma.js';
+import { TrainStatus } from '@prisma/client';
 
 interface FalFile {
   url: string;
@@ -53,6 +54,7 @@ export interface TrainingProgress {
 }
 
 export interface TrainingResult {
+  requestId: string;
   weights: {
     url: string;
     fileName: string;
@@ -67,11 +69,17 @@ export interface TrainingResult {
   };
 }
 
+const STANDARD_MESSAGES = {
+  PENDING: 'Initializing training...',
+  PROCESSING: 'Training in progress...',
+  COMPLETED: 'Training completed successfully',
+  FAILED: (error: string) => `Training failed: ${error}`
+};
+
 if (!process.env.FAL_KEY) {
   throw new Error('FAL_KEY environment variable is not set');
 }
 
-// Now TypeScript knows FAL_KEY is not undefined
 const credentials = process.env.FAL_KEY;
 
 export class TrainingService {
@@ -104,6 +112,7 @@ export class TrainingService {
     const baseUrl = `https://test-url/TEST_${testId}`;
 
     return {
+      requestId: `test_${testId}`,
       weights: {
         url: `${baseUrl}_${trigger_word}_weights.safetensors`,
         fileName: `${trigger_word}_weights.safetensors`,
@@ -123,24 +132,25 @@ export class TrainingService {
     return this.activeTrainings.get(requestId) || null;
   }
 
-  private updateTrainingProgress(requestId: string, update: FalQueueStatusResponse) {
+  private async updateTrainingProgress(requestId: string, update: FalQueueStatusResponse) {
     if (!update.logs || update.logs.length === 0) {
       logger.debug({ requestId }, 'No logs in update');
       return;
     }
 
-    // Update progress based on logs
-    let progress = 0;
-    let message = 'Processing...';
-
     try {
+      // Update progress based on logs
+      let progress = 0;
+      let message = STANDARD_MESSAGES.PROCESSING;
+      let currentStatus: TrainingProgress['status'] = 'training';
+
       // Find progress message
       const progressLog = update.logs
         .map((log) => log.message)
         .find((msg) => msg?.includes('progress'));
 
       if (progressLog) {
-        const match = progressLog.match(/(\\d+)%/);
+        const match = progressLog.match(/(\d+)%/);
         if (match) {
           progress = parseInt(match[1]);
         }
@@ -155,54 +165,75 @@ export class TrainingService {
         message = lastValidMessage.message;
       }
 
-      // Update status
-      let currentStatus: TrainingProgress['status'] = 'training';
-      
+      // Update status based on FAL response
       if (update.status === 'COMPLETED') {
         currentStatus = 'completed';
         progress = 100;
-        message = 'Training completed successfully';
-
-        this.activeTrainings.set(requestId, {
-          status: currentStatus,
-          progress,
-          message
-        });
-
-        // Clean up after delay
-        setTimeout(() => {
-          this.activeTrainings.delete(requestId);
-        }, 60 * 1000); // Remove after 1 minute
+        message = STANDARD_MESSAGES.COMPLETED;
       } else if (update.status === 'FAILED') {
         currentStatus = 'failed';
-        message = 'Training failed';
+        // Use last log message as error if available
+        const errorMessage = lastValidMessage?.message || 'Unknown error';
+        message = STANDARD_MESSAGES.FAILED(errorMessage);
+      }
 
-        this.activeTrainings.set(requestId, {
-          status: currentStatus,
-          progress,
-          message
-        });
+      // Update training status in memory
+      this.activeTrainings.set(requestId, {
+        status: currentStatus,
+        progress,
+        message
+      });
+
+      // Try to update training record in database
+      const training = await prisma.training.findFirst({
+        where: { falRequestId: requestId }
+      });
+
+      if (training) {
+        if (currentStatus === 'completed' || currentStatus === 'failed') {
+          // Update training record
+          await prisma.training.update({
+            where: { databaseId: training.databaseId },
+            data: {
+              status: currentStatus === 'completed' ? TrainStatus.COMPLETED : TrainStatus.FAILED,
+              completedAt: currentStatus === 'completed' ? new Date() : null,
+              error: currentStatus === 'failed' ? message : null
+            }
+          });
+
+          // Remove from active trainings after a delay
+          setTimeout(() => {
+            this.activeTrainings.delete(requestId);
+          }, 60 * 1000); // Remove after 1 minute
+        }
       } else {
-        // Update training status
-        this.activeTrainings.set(requestId, {
-          status: currentStatus,
-          progress,
-          message
-        });
+        logger.warn({ 
+          requestId,
+          status: currentStatus
+        }, 'Could not find training record to update status');
       }
 
       logger.debug({ 
         requestId, 
         status: currentStatus, 
         progress, 
-        message 
+        message,
+        trainingId: training?.databaseId
       }, 'Updated training progress');
+
     } catch (error) {
       logger.error({ 
         error, 
         requestId,
         updateData: update 
       }, 'Error processing training update');
+
+      // Even if there's an error updating the database, maintain the in-memory status
+      this.activeTrainings.set(requestId, {
+        status: 'failed',
+        progress: 0,
+        message: STANDARD_MESSAGES.FAILED(error instanceof Error ? error.message : 'Internal error')
+      });
     }
   }
 
@@ -256,6 +287,7 @@ export class TrainingService {
       }
 
       const trainingResult = {
+        requestId: result.requestId,
         weights: this.convertFileToJson(result.data.diffusers_lora_file),
         config: this.convertFileToJson(result.data.config_file)
       };
@@ -272,17 +304,19 @@ export class TrainingService {
           }
         });
 
-        // Find training record by result.requestId in loraId
+        // Find training by falRequestId
         const training = await prisma.training.findFirst({
-          where: { loraId: result.requestId }
+          where: { falRequestId: result.requestId }
         });
 
         if (training) {
-          // Update training record with stars spent
+          // Update training record with stars spent and completed status
           await prisma.training.update({
             where: { databaseId: training.databaseId },
             data: {
-              starsSpent: this.TRAINING_COST
+              starsSpent: this.TRAINING_COST,
+              status: TrainStatus.COMPLETED,
+              completedAt: new Date()
             }
           });
         } else {
