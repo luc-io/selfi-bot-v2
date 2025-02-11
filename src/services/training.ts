@@ -123,17 +123,17 @@ export class TrainingService {
     return this.activeTrainings.get(requestId) || null;
   }
 
-  private updateTrainingProgress(requestId: string, update: FalQueueStatusResponse) {
+  private async updateTrainingProgress(requestId: string, update: FalQueueStatusResponse) {
     if (!update.logs || update.logs.length === 0) {
       logger.debug({ requestId }, 'No logs in update');
       return;
     }
 
-    // Update progress based on logs
-    let progress = 0;
-    let message = 'Processing...';
-
     try {
+      // Update progress based on logs
+      let progress = 0;
+      let message = 'Processing...';
+
       // Find progress message
       const progressLog = update.logs
         .map((log) => log.message)
@@ -162,41 +162,55 @@ export class TrainingService {
         currentStatus = 'completed';
         progress = 100;
         message = 'Training completed successfully';
-
-        this.activeTrainings.set(requestId, {
-          status: currentStatus,
-          progress,
-          message
-        });
-
-        // Clean up after delay
-        setTimeout(() => {
-          this.activeTrainings.delete(requestId);
-        }, 60 * 1000); // Remove after 1 minute
       } else if (update.status === 'FAILED') {
         currentStatus = 'failed';
         message = 'Training failed';
+      }
 
-        this.activeTrainings.set(requestId, {
-          status: currentStatus,
-          progress,
-          message
-        });
+      // Update training status in memory
+      this.activeTrainings.set(requestId, {
+        status: currentStatus,
+        progress,
+        message
+      });
+
+      // Try to update training record in database
+      const training = await prisma.training.findFirst({
+        where: { falRequestId: requestId }
+      });
+
+      if (training) {
+        if (currentStatus === 'completed' || currentStatus === 'failed') {
+          // If training is complete or failed, update the status
+          await prisma.training.update({
+            where: { databaseId: training.databaseId },
+            data: {
+              status: currentStatus === 'completed' ? 'COMPLETED' : 'FAILED',
+              completedAt: currentStatus === 'completed' ? new Date() : null,
+              error: currentStatus === 'failed' ? message : null
+            }
+          });
+
+          // Remove from active trainings after a delay
+          setTimeout(() => {
+            this.activeTrainings.delete(requestId);
+          }, 60 * 1000); // Remove after 1 minute
+        }
       } else {
-        // Update training status
-        this.activeTrainings.set(requestId, {
-          status: currentStatus,
-          progress,
-          message
-        });
+        logger.warn({ 
+          requestId,
+          status: currentStatus
+        }, 'Could not find training record to update status');
       }
 
       logger.debug({ 
         requestId, 
         status: currentStatus, 
         progress, 
-        message 
+        message,
+        trainingId: training?.databaseId
       }, 'Updated training progress');
+
     } catch (error) {
       logger.error({ 
         error, 
@@ -272,17 +286,19 @@ export class TrainingService {
           }
         });
 
-        // Find training record by result.requestId in loraId
+        // Find training by falRequestId
         const training = await prisma.training.findFirst({
-          where: { loraId: result.requestId }
+          where: { falRequestId: result.requestId }
         });
 
         if (training) {
-          // Update training record with stars spent
+          // Update training record with stars spent and completed status
           await prisma.training.update({
             where: { databaseId: training.databaseId },
             data: {
-              starsSpent: this.TRAINING_COST
+              starsSpent: this.TRAINING_COST,
+              status: 'COMPLETED',
+              completedAt: new Date()
             }
           });
         } else {
