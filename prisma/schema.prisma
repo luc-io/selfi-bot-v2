@@ -76,6 +76,7 @@ model Training {
   databaseId      String       @id @default(cuid())
   loraId          String       @unique
   lora            LoraModel    @relation(fields: [loraId], references: [databaseId])
+  falRequestId    String?      @unique
   baseModelId     String
   baseModel       BaseModel    @relation(fields: [baseModelId], references: [databaseId])
   userDatabaseId  String
