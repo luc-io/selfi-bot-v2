@@ -70,6 +70,32 @@ const imagesRoutes: FastifyPluginAsync = async (fastify) => {
           })
         ]);
 
+        function buildInlineCommand(generation: typeof generations[0]): string {
+          const metadata = generation.metadata as any;
+          const steps = metadata?.num_inference_steps;
+          const scale = metadata?.guidance_scale;
+          const loras = metadata?.loras as Array<{ triggerWord: string; scale: number }> | undefined;
+
+          const parts = ['/gen', generation.prompt];
+
+          if (steps) {
+            parts.push(`--s ${steps}`);
+          }
+          if (scale) {
+            parts.push(`--c ${scale}`);
+          }
+          if (generation.seed) {
+            parts.push(`--seed ${generation.seed.toString()}`);
+          }
+          if (loras) {
+            loras.forEach(lora => {
+              parts.push(`--l ${lora.triggerWord}:${lora.scale}`);
+            });
+          }
+
+          return parts.join(' ');
+        }
+
         const images = generations.map(gen => ({
           id: gen.databaseId,
           url: gen.imageUrl,
@@ -87,6 +113,7 @@ const imagesRoutes: FastifyPluginAsync = async (fastify) => {
             triggerWord: gen.lora.triggerWord,
             scale: (gen.metadata as Record<string, unknown> || {}).loraScale as number || 1
           }] : [],
+          inlineCommand: buildInlineCommand(gen)
         }));
 
         logger.info({
