@@ -14,7 +14,10 @@ interface InlineParams {
   c?: number;
   seed?: number;
   n?: number;
-  l?: string;
+  loras?: Array<{
+    triggerWord: string;
+    scale: number;
+  }>;
 }
 
 interface GenerationParams {
@@ -25,7 +28,7 @@ interface GenerationParams {
   enableSafetyChecker?: boolean;
   outputFormat?: 'jpeg' | 'png';
   loras?: { path: string; scale: number }[];
-  seed?: number;  // Optional, generation service will handle it
+  seed?: number;
 }
 
 function normalizeCommandText(text: string): string {
@@ -36,7 +39,9 @@ function parseInlineParams(text: string): { prompt: string; params: InlineParams
   const normalizedText = normalizeCommandText(text);
   const parts = normalizedText.split(/\s+--/);
   const prompt = parts[0].split(/\/gen\s*/)[1]?.trim();
-  const params: InlineParams = {};
+  const params: InlineParams = {
+    loras: []
+  };
 
   logger.info({ originalText: text, normalizedText, parts }, 'Parsing inline parameters');
 
@@ -58,9 +63,14 @@ function parseInlineParams(text: string): { prompt: string; params: InlineParams
       case 'n':
         params.n = parseInt(value);
         break;
-      case 'l':
-        params.l = value;
+      case 'l': {
+        const [triggerWord, scale] = value.split(':');
+        params.loras?.push({
+          triggerWord,
+          scale: parseFloat(scale) || 1
+        });
         break;
+      }
     }
   }
 
@@ -79,7 +89,7 @@ async function convertInlineToGenerationParams(
     enableSafetyChecker: userParams?.enable_safety_checker,
     outputFormat: userParams?.output_format as 'jpeg' | 'png' | undefined,
     loras: userParams?.loras,
-    seed: inlineParams.seed  // Just pass through the seed if provided
+    seed: inlineParams.seed
   };
 
   if (inlineParams.ar) {
@@ -96,22 +106,30 @@ async function convertInlineToGenerationParams(
   if (inlineParams.c) baseParams.guidanceScale = inlineParams.c;
   if (inlineParams.n) baseParams.numImages = inlineParams.n;
 
-  if (inlineParams.l) {
-    const [triggerWord, scale] = inlineParams.l.split(':');
-    // Find LoRA by trigger word
-    const lora = await prisma.loraModel.findFirst({
-      where: { triggerWord },
-      select: { databaseId: true }
+  if (inlineParams.loras && inlineParams.loras.length > 0) {
+    // Find all LoRAs by trigger words
+    const loraPromises = inlineParams.loras.map(async ({ triggerWord, scale }) => {
+      const lora = await prisma.loraModel.findFirst({
+        where: { triggerWord },
+        select: { databaseId: true }
+      });
+
+      if (lora) {
+        logger.info({ triggerWord, loraId: lora.databaseId, scale }, 'Found LoRA by trigger word');
+        return {
+          path: lora.databaseId,
+          scale
+        };
+      } else {
+        logger.warn({ triggerWord }, 'LoRA not found by trigger word');
+        return null;
+      }
     });
 
-    if (lora) {
-      baseParams.loras = [{
-        path: lora.databaseId,
-        scale: parseFloat(scale) || 1
-      }];
-      logger.info({ triggerWord, loraId: lora.databaseId, scale }, 'Found LoRA by trigger word');
-    } else {
-      logger.warn({ triggerWord }, 'LoRA not found by trigger word');
+    const resolvedLoras = (await Promise.all(loraPromises)).filter((lora): lora is { path: string; scale: number } => lora !== null);
+    
+    if (resolvedLoras.length > 0) {
+      baseParams.loras = resolvedLoras;
     }
   }
 
@@ -128,7 +146,7 @@ composer.command("gen", hasSubscription, async (ctx) => {
   
   if (!prompt) {
     await ctx.reply(`❌ Please provide a prompt after the /gen command.
-Example: /gen a beautiful sunset --ar 16:9 --s 28 --c 3.5 --l <trigger_word>:1.7
+Example: /gen a beautiful sunset --ar 16:9 --s 28 --c 3.5 --l trigger_word:1.7 --l another_lora:0.8
 
 Parameters:
 --ar: Aspect ratio (16:9, 1:1)
@@ -136,7 +154,7 @@ Parameters:
 --c: CFG Scale (default: 3.5)
 --seed: Seed value
 --n: Number of images
---l: LoRA trigger word and scale (format: trigger_word:1.7)`);
+--l: LoRA trigger word and scale (can be used multiple times, format: trigger_word:1.7)`);
     return;
   }
 
