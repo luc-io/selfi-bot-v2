@@ -5,7 +5,6 @@ import { handleError } from "../../utils/error.js";
 import { BotContext } from "../../types/bot.js";
 import { prisma } from "../../lib/prisma.js";
 import { logger } from "../../lib/logger.js";
-import { generateFalSeed } from "../../utils/seed.js";
 
 const composer = new Composer<BotContext>();
 
@@ -26,7 +25,7 @@ interface GenerationParams {
   enableSafetyChecker?: boolean;
   outputFormat?: 'jpeg' | 'png';
   loras?: { path: string; scale: number }[];
-  seed: number;  // Made required
+  seed?: number;  // Optional, generation service will handle it
 }
 
 function normalizeCommandText(text: string): string {
@@ -80,7 +79,7 @@ async function convertInlineToGenerationParams(
     enableSafetyChecker: userParams?.enable_safety_checker,
     outputFormat: userParams?.output_format as 'jpeg' | 'png' | undefined,
     loras: userParams?.loras,
-    seed: inlineParams.seed ?? generateFalSeed()  // Always provide a seed, either from params or generated
+    seed: inlineParams.seed  // Just pass through the seed if provided
   };
 
   if (inlineParams.ar) {
