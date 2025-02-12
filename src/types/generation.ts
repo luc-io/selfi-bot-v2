@@ -6,7 +6,7 @@ export interface GenerateImageParams {
   }[];
   imageSize?: string;
   numInferenceSteps?: number;
-  seed: number;  // Made required
+  seed?: number;  // Optional again - backend will handle if not provided
   guidanceScale?: number;
   syncMode?: boolean;
   enableSafetyChecker?: boolean;
