@@ -6,12 +6,13 @@ export interface GenerateImageParams {
   }[];
   imageSize?: string;
   numInferenceSteps?: number;
-  seed?: number;
+  seed?: number;  // Optional again - backend will handle if not provided
   guidanceScale?: number;
-  numImages?: number;
   syncMode?: boolean;
   enableSafetyChecker?: boolean;
   outputFormat?: 'jpeg' | 'png';
+  /** @deprecated Use multiple single-image generations instead */
+  numImages?: number;
 }
 
 export interface GenerationRequest {

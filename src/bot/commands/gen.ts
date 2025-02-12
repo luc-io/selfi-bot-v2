@@ -25,7 +25,7 @@ interface GenerationParams {
   enableSafetyChecker?: boolean;
   outputFormat?: 'jpeg' | 'png';
   loras?: { path: string; scale: number }[];
-  seed?: number;
+  seed?: number;  // Optional, generation service will handle it
 }
 
 function normalizeCommandText(text: string): string {
@@ -79,7 +79,7 @@ async function convertInlineToGenerationParams(
     enableSafetyChecker: userParams?.enable_safety_checker,
     outputFormat: userParams?.output_format as 'jpeg' | 'png' | undefined,
     loras: userParams?.loras,
-    seed: undefined
+    seed: inlineParams.seed  // Just pass through the seed if provided
   };
 
   if (inlineParams.ar) {
@@ -94,7 +94,6 @@ async function convertInlineToGenerationParams(
 
   if (inlineParams.s) baseParams.numInferenceSteps = inlineParams.s;
   if (inlineParams.c) baseParams.guidanceScale = inlineParams.c;
-  if (inlineParams.seed) baseParams.seed = inlineParams.seed;
   if (inlineParams.n) baseParams.numImages = inlineParams.n;
 
   if (inlineParams.l) {
