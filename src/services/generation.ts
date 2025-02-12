@@ -4,13 +4,14 @@ import type { GenerateImageParams, GenerationResponse } from '../types/generatio
 import { logger } from '../lib/logger.js';
 import { prisma } from '../lib/prisma.js';
 import { StarsService } from './stars.js';
+import { generateFalSeed, isValidSeed } from '../utils/seed.js';
 
 interface FalRequestParams {
   input: {
     prompt: string;
     image_size?: string;
     num_inference_steps?: number;
-    seed?: number;
+    seed: number;  // Made required as we always pass it
     guidance_scale?: number;
     num_images?: number;
     enable_safety_checker?: boolean;
@@ -83,13 +84,20 @@ export async function generateImage(params: GenerateImageParams & { telegramId: 
   if (!baseModel) {
     throw new Error('Base model not found');
   }
+
+  // Handle seed - if provided and valid, use it; otherwise generate new one
+  let seed = params.seed;
+  if (!seed || !isValidSeed(seed)) {
+    seed = generateFalSeed();
+    logger.info({ originalSeed: params.seed, generatedSeed: seed }, 'Generated new seed for request');
+  }
   
   const requestParams: FalRequestParams = {
     input: {
       prompt: params.prompt,
       image_size: params.imageSize ?? 'square',
       num_inference_steps: params.numInferenceSteps ?? 28,
-      seed: params.seed,
+      seed: seed,  // Always pass a valid seed
       guidance_scale: params.guidanceScale ?? 3.5,
       num_images: numImages,
       enable_safety_checker: params.enableSafetyChecker ?? true,
