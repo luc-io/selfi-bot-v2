@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
 import { LoraStatus, TrainStatus, Prisma } from '@prisma/client';
-import { TrainingService } from '../../services/training.js';
+import { trainingService } from '../../services/training.js';
 import { StorageService } from '../../services/storage.js';
 import { createTrainingArchive, type TrainingFile } from '../../lib/zip.js';
 import type { MultipartFile } from '@fastify/multipart';
@@ -21,7 +21,6 @@ const MAX_TOTAL_SIZE = 300 * 1024 * 1024; // 300MB total to match nginx config
 const MAX_FILES = 20;  // Good number for training set
 
 // Services
-const trainingService = new TrainingService();
 const storageService = new StorageService();
 
 export async function trainingRoutes(app: FastifyInstance) {
@@ -314,16 +313,33 @@ export async function trainingRoutes(app: FastifyInstance) {
     try {
       const { id } = request.params as { id: string };
 
-      const training = await prisma.training.findUnique({
-        where: { databaseId: id },
+      logger.info({ 
+        id,
+        endpoint: 'status'
+      }, 'Training status request received');
+
+      const training = await prisma.training.findFirst({
+        where: { 
+          OR: [
+            { databaseId: id },
+            { falRequestId: id }
+          ]
+        },
         include: {
           lora: true
         }
       });
 
       if (!training) {
+        logger.warn({ id }, 'Training not found for status check');
         return reply.status(404).send({ error: 'Training not found' });
       }
+
+      logger.info({ 
+        trainingId: training.databaseId,
+        falRequestId: training.falRequestId,
+        status: training.status
+      }, 'Training record found');
 
       const metadata = training.metadata as Prisma.JsonObject | null;
       const isTestMode = metadata ? Boolean(metadata.test_mode) : false;
@@ -333,6 +349,12 @@ export async function trainingRoutes(app: FastifyInstance) {
         trainingService.getTrainingProgress(training.falRequestId) : 
         null;
 
+      logger.info({ 
+        trainingId: training.databaseId,
+        falRequestId: training.falRequestId,
+        progress
+      }, 'Retrieved training progress');
+
       let status = training.status;
       // If we have progress info and it indicates completion/failure, update status
       if (progress) {
@@ -340,26 +362,37 @@ export async function trainingRoutes(app: FastifyInstance) {
           status = TrainStatus.COMPLETED;
           // Update the database record
           await prisma.training.update({
-            where: { databaseId: id },
+            where: { databaseId: training.databaseId },
             data: { 
               status: TrainStatus.COMPLETED,
               completedAt: new Date()
             }
           });
+          logger.info({ 
+            trainingId: training.databaseId,
+            newStatus: status 
+          }, 'Updated training to completed status');
+
         } else if (progress.status === 'failed' && status !== TrainStatus.FAILED) {
           status = TrainStatus.FAILED;
           // Update the database record
           await prisma.training.update({
-            where: { databaseId: id },
+            where: { databaseId: training.databaseId },
             data: { 
               status: TrainStatus.FAILED,
               error: progress.message || 'Training failed'
             }
           });
+          logger.warn({ 
+            trainingId: training.databaseId,
+            newStatus: status,
+            error: progress.message
+          }, 'Updated training to failed status');
         }
       }
 
-      return reply.send({
+      // Prepare response
+      const response = {
         trainingId: training.databaseId,
         loraId: training.loraId,
         falRequestId: training.falRequestId,
@@ -374,7 +407,16 @@ export async function trainingRoutes(app: FastifyInstance) {
           progress: progress.progress,
           message: progress.message
         } : null
-      });
+      };
+
+      logger.info({ 
+        trainingId: training.databaseId,
+        falRequestId: training.falRequestId,
+        status,
+        progress: response.progress
+      }, 'Sending training status response');
+
+      return reply.send(response);
     } catch (error) {
       logger.error({ error }, 'Failed to get training status');
       const errorMessage = error instanceof Error ? error.message : 'Failed to get training status';
