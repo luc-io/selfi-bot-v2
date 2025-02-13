@@ -6,6 +6,16 @@ import { prisma } from '../lib/prisma.js';
 import { StarsService } from './stars.js';
 import { generateFalSeed, isValidSeed } from '../utils/seed.js';
 
+interface LoraConfig {
+  config: {
+    path: string;
+    scale: number;
+  };
+  id: string;
+  name: string;
+  triggerWord: string;
+}
+
 interface FalRequestParams {
   input: {
     prompt: string;
@@ -31,16 +41,13 @@ fal.config({
   credentials: falKey
 });
 
-const MAX_SAFE_BIGINT = BigInt('9223372036854775807'); // PostgreSQL bigint max
-const MIN_SAFE_BIGINT = BigInt('-9223372036854775808'); // PostgreSQL bigint min
-
-function validateAndConvertSeed(seed: number | string | undefined): bigint | null {
+function validateAndConvertSeed(seed: number): bigint | null {
   if (!seed) return null;
   
   try {
-    const bigIntSeed = typeof seed === 'string' ? BigInt(seed) : BigInt(seed.toString());
+    const bigIntSeed = BigInt(seed);
     
-    if (bigIntSeed > MAX_SAFE_BIGINT || bigIntSeed < MIN_SAFE_BIGINT) {
+    if (bigIntSeed > BigInt('9223372036854775807') || bigIntSeed < BigInt('-9223372036854775808')) {
       logger.warn({ seed, bigIntSeed: bigIntSeed.toString() }, 'Seed value out of PostgreSQL bigint range, defaulting to null');
       return null;
     }
@@ -91,13 +98,13 @@ export async function generateImage(params: GenerateImageParams & { telegramId: 
     seed = generateFalSeed();
     logger.info({ originalSeed: params.seed, generatedSeed: seed }, 'Generated new seed for request');
   }
-  
+
   const requestParams: FalRequestParams = {
     input: {
       prompt: params.prompt,
       image_size: params.imageSize ?? 'square',
       num_inference_steps: params.numInferenceSteps ?? 28,
-      seed: seed,  // Always pass a valid seed
+      seed: seed,
       guidance_scale: params.guidanceScale ?? 3.5,
       num_images: numImages,
       enable_safety_checker: params.enableSafetyChecker ?? true,
@@ -107,15 +114,19 @@ export async function generateImage(params: GenerateImageParams & { telegramId: 
   };
 
   // Get LoRA info if present
-  let firstLoraId: string | undefined;
-  let validLoraConfigs: Array<{ config: { path: string; scale: number }; id: string }> = [];
+  let validLoraConfigs: LoraConfig[] = [];
 
   if (params.loras && params.loras.length > 0) {
     const loraPromises = params.loras.map(async (lora) => {
       // Get LoRA details from database
       const loraModel = await prisma.loraModel.findUnique({
         where: { databaseId: lora.path },
-        select: { weightsUrl: true, databaseId: true }
+        select: { 
+          weightsUrl: true,
+          databaseId: true,
+          name: true,
+          triggerWord: true
+        }
       });
 
       if (!loraModel?.weightsUrl) {
@@ -123,21 +134,19 @@ export async function generateImage(params: GenerateImageParams & { telegramId: 
         return null;
       }
 
-      // Store the first LoRA ID for later use
-      if (!firstLoraId) {
-        firstLoraId = loraModel.databaseId;
-      }
-
       return {
         config: {
           path: loraModel.weightsUrl,
           scale: lora.scale
         },
-        id: loraModel.databaseId
+        id: loraModel.databaseId,
+        name: loraModel.name,
+        triggerWord: loraModel.triggerWord
       };
     });
 
-    validLoraConfigs = (await Promise.all(loraPromises)).filter((config): config is { config: { path: string; scale: number }; id: string } => config !== null);
+    validLoraConfigs = (await Promise.all(loraPromises))
+      .filter((config): config is LoraConfig => config !== null);
 
     if (validLoraConfigs.length > 0) {
       requestParams.input.loras = validLoraConfigs.map(config => config.config);
@@ -181,21 +190,23 @@ export async function generateImage(params: GenerateImageParams & { telegramId: 
         guidance_scale: requestParams.input.guidance_scale,
         enable_safety_checker: requestParams.input.enable_safety_checker,
         output_format: requestParams.input.output_format,
-        loraScale: params.loras?.[0]?.scale
+        loras: validLoraConfigs.map(lora => ({
+          id: lora.id,
+          name: lora.name,
+          triggerWord: lora.triggerWord,
+          scale: lora.config.scale,
+          weightsUrl: lora.config.path
+        }))
       };
-
-      // Convert and validate seed
-      const validatedSeed = validateAndConvertSeed(result.data.seed);
-      logger.info({ originalSeed: result.data.seed, validatedSeed }, 'Seed validation result');
 
       const savedImage = await prisma.generation.create({
         data: {
           userDatabaseId: user.databaseId,
           baseModelId: baseModel.databaseId,
-          loraId: firstLoraId,
+          loraId: validLoraConfigs[0]?.id,  // Keep first LoRA for backwards compatibility
           prompt: params.prompt,
           imageUrl: img.url,
-          seed: validatedSeed,
+          seed: validateAndConvertSeed(result.data.seed),
           starsUsed: requiredStars / numImages,
           metadata: metadata
         }

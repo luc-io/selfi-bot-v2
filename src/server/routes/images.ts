@@ -2,6 +2,14 @@ import { FastifyPluginAsync } from 'fastify';
 import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
 
+interface StoredLora {
+  id: string;
+  name: string;
+  triggerWord: string;
+  scale: number;
+  weightsUrl: string;
+}
+
 // Note: The actual route will be /api/images because the parent plugin has the /api prefix
 const imagesRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.route({
@@ -59,8 +67,7 @@ const imagesRoutes: FastifyPluginAsync = async (fastify) => {
             take: limit,
             skip,
             include: {
-              baseModel: true,
-              lora: true
+              baseModel: true
             }
           }),
           prisma.generation.count({
@@ -70,24 +77,37 @@ const imagesRoutes: FastifyPluginAsync = async (fastify) => {
           })
         ]);
 
-        const images = generations.map(gen => ({
-          id: gen.databaseId,
-          url: gen.imageUrl,
-          prompt: gen.prompt,
-          seed: gen.seed ? Number(gen.seed) : undefined,
-          createdAt: gen.createdAt.toISOString(),
-          hasNsfw: false, // TODO: Add NSFW detection if implemented
-          params: {
-            ...(gen.metadata as Record<string, unknown> || {}),
-            modelPath: gen.baseModel.modelPath,
-          },
-          loras: gen.lora ? [{
-            path: gen.lora.databaseId,
-            name: gen.lora.name,
-            triggerWord: gen.lora.triggerWord,
-            scale: (gen.metadata as Record<string, unknown> || {}).loraScale as number || 1
-          }] : [],
-        }));
+        const images = generations.map(gen => {
+          const metadata = gen.metadata as Record<string, any>;
+          // Get all LoRAs from metadata
+          const storedLoras = (metadata?.loras || []) as StoredLora[];
+          
+          return {
+            id: gen.databaseId,
+            url: gen.imageUrl,
+            prompt: gen.prompt,
+            seed: gen.seed ? Number(gen.seed) : undefined,
+            createdAt: gen.createdAt.toISOString(),
+            hasNsfw: false, // TODO: Add NSFW detection if implemented
+            params: {
+              image_size: metadata?.image_size,
+              output_format: metadata?.output_format,
+              guidance_scale: metadata?.guidance_scale,
+              num_inference_steps: metadata?.num_inference_steps,
+              enable_safety_checker: metadata?.enable_safety_checker,
+              modelPath: gen.baseModel.modelPath,
+              // Include full LoRAs data in params
+              loras: storedLoras
+            },
+            // Convert stored LoRAs to frontend format
+            loras: storedLoras.map(lora => ({
+              path: lora.id,
+              name: lora.name,
+              triggerWord: lora.triggerWord,
+              scale: lora.scale
+            }))
+          };
+        });
 
         logger.info({
           userDatabaseId: user.databaseId,
