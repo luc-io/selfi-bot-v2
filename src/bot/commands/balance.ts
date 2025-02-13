@@ -10,12 +10,12 @@ composer.command('balance', async (ctx) => {
   try {
     if (!ctx.from?.id) {
       logger.warn('No from field in context');
-      await ctx.reply('Could not identify user');
+      await ctx.reply('No se pudo identificar al usuario');
       return;
     }
 
     const telegramId = ctx.from.id.toString();
-    logger.info({ telegramId }, 'Balance command received');
+    logger.info({ telegramId }, 'Comando Balance recibido');
 
     const user = await prisma.user.findUnique({
       where: { telegramId },
@@ -27,18 +27,16 @@ composer.command('balance', async (ctx) => {
     });
     
     if (!user) {
-      logger.warn({ telegramId }, 'User not found in database');
-      await ctx.reply('You need to use /start first to create your account!');
+      logger.warn({ telegramId }, 'El usuario no se encuentra en la base de datos');
+      await ctx.reply('Usa /Inicio para iniciar el bot!');
       return;
     }
 
-    const message = `💫 *Your Stars Balance*
+    const message = `💫 *To balance de estrellas*
     
-Current Balance: ${user.stars ?? 0} ⭐
-Total Bought: ${user.totalBoughtStars ?? 0} ⭐
-Total Spent: ${user.totalSpentStars ?? 0} ⭐
+Balance actual: ${user.stars ?? 0} ⭐
 
-Use /stars to buy more stars for generating images!`;
+Usa /estrellas para comprar más ⭐ para generar imágenes o entrenar un modelo !`;
 
     logger.info({ 
       telegramId, 
@@ -49,8 +47,8 @@ Use /stars to buy more stars for generating images!`;
 
     await ctx.reply(message, { parse_mode: 'Markdown' });
   } catch (error) {
-    logger.error({ error }, 'Failed to check balance');
-    await ctx.reply('Sorry, something went wrong while checking your balance. Please try again.');
+    logger.error({ error }, 'Error al consultar el balance');
+    await ctx.reply('Disculpa, algo salió mal al consultar su balance. Intentalo nuevamente.');
   }
 });
 
