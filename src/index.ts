@@ -31,7 +31,7 @@ async function setupWebhook(bot: Bot<BotContext>): Promise<boolean> {
 
     // Register bot commands
     await bot.api.setMyCommands([
-      { command: 'start', description: 'Iniciar el bot' },
+      { command: 'inicio', description: 'Iniciar el bot' },
       { command: 'gen', description: 'Generar una nueva imagen con IA' },
       { command: 'stars', description: 'Comprar estrellas (moneda para generaciones)' },
       { command: 'balance', description: 'Consultar tu saldo de estrellas' },
