@@ -9,7 +9,7 @@ const composer = new Composer<BotContext>();
 composer.command('approve', async (ctx) => {
   if (!ctx.from) {
     logger.warn('No from field in context');
-    await ctx.reply('Could not identify user');
+    await ctx.reply('No se pudo identificar al usuario');
     return;
   }
 
@@ -27,7 +27,7 @@ composer.command('approve', async (ctx) => {
     const targetTelegramId = args[0];
 
     if (!targetTelegramId) {
-      await ctx.reply('Please provide a user ID to approve.\n\nUsage: /approve <telegram_id>');
+      await ctx.reply('Por favor proporciona un ID de usuario para aprobar.\n\nUso: /approve <telegram_id>');
       return;
     }
 
@@ -37,12 +37,12 @@ composer.command('approve', async (ctx) => {
     });
 
     if (!user) {
-      await ctx.reply('User not found.');
+      await ctx.reply('Usuario no encontrado.');
       return;
     }
 
     if (user.status === 'APPROVED') {
-      await ctx.reply('This user is already approved.');
+      await ctx.reply('Este usuario ya está aprobado.');
       return;
     }
 
@@ -72,14 +72,14 @@ composer.command('approve', async (ctx) => {
     // Notify the approved user
     await ctx.api.sendMessage(
       targetTelegramId,
-      '🎉 <b>Welcome to Selfi!</b>\n\n' +
-      'Your access has been approved and you\'ve received 10 ⭐ welcome bonus stars!\n\n' +
-      'Use /help to see all available commands.',
+      '🎉 <b>¡Bienvenido a Selfi!</b>\n\n' +
+      'Tu acceso ha sido aprobado y has recibido 10 ⭐ estrellas de bienvenida!\n\n' +
+      'Usa /help para ver todos los comandos disponibles.',
       { parse_mode: 'HTML' }
     );
 
     // Confirm to admin
-    await ctx.reply(`User ${targetTelegramId} has been approved and received welcome bonus.`);
+    await ctx.reply(`Usuario ${targetTelegramId} ha sido aprobado y ha recibido el bono de bienvenida.`);
 
     logger.info({ approvedTelegramId: targetTelegramId }, 'User approved and welcome bonus granted');
   } catch (error) {
@@ -88,7 +88,7 @@ composer.command('approve', async (ctx) => {
       command: 'approve'
     }, 'Error in approve command');
     
-    await ctx.reply('Sorry, something went wrong while processing the approval.');
+    await ctx.reply('Lo sentimos, algo salió mal mientras procesábamos la aprobación.');
   }
 });
 
