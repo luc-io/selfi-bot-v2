@@ -31,13 +31,14 @@ async function setupWebhook(bot: Bot<BotContext>): Promise<boolean> {
 
     // Register bot commands
     await bot.api.setMyCommands([
-      { command: 'start', description: 'Start the bot' },
-      { command: 'gen', description: 'Generate a new image with AI' },
-      { command: 'stars', description: 'Buy stars (currency for generations)' },
-      { command: 'balance', description: 'Check your stars balance' },
-      { command: 'help', description: 'Show all available commands' },
+      { command: 'inicio', description: 'Iniciar el bot' },
+      { command: 'gen', description: 'Generar una nueva imagen con IA' },
+      { command: 'estrellas', description: 'Comprar estrellas (moneda para generaciones)' },
+      { command: 'balance', description: 'Consultar tu saldo de estrellas' },
+      { command: 'ayuda', description: 'Mostrar todos los comandos disponibles' },
+      { command: 'menu', description: 'Abrir los ajustes de la Mini App' },
       ...(config.ADMIN_TELEGRAM_ID ? [
-        { command: 'grant', description: 'Grant stars to users (Admin only)' }
+        { command: 'grant', description: 'Otorgar estrellas a usuarios (Solo Admin)' }
       ] : [])
     ]);
     logger.info('Bot commands registered with Telegram');
