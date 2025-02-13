@@ -17,7 +17,7 @@ const starPacks = [
 composer.command('stars', async (ctx) => {
   const telegramId = ctx.from?.id.toString();
   if (!telegramId || !ctx.from) {
-    await ctx.reply('Could not identify user');
+    await ctx.reply('No se pudo identificar al usuario');
     return;
   }
 
@@ -35,13 +35,13 @@ composer.command('stars', async (ctx) => {
     };
 
     await ctx.reply(
-      `You have ${balance.stars} ⭐\n\n` +
-      `Each image generation costs 3 ⭐\nEach training costs 150 ⭐\n\nBuy more stars:`,
+      `Tienes ${balance.stars} ⭐\n\n` +
+      `Cada generación de imagen cuesta 3 ⭐\nCada entrenamiento cuesta 150 ⭐\n\nCompra más estrellas:`,
       { reply_markup: inlineKeyboard }
     );
   } catch (error) {
     logger.error({ error, telegramId }, 'Error in stars command');
-    await ctx.reply('Sorry, something went wrong.');
+    await ctx.reply('Lo sentimos, algo salió mal.');
   }
 });
 
@@ -54,19 +54,19 @@ composer.callbackQuery(/^buy_stars:(\d+)$/, async (ctx) => {
   const price = starPacks.find(([s]) => s === stars)?.[1];
 
   if (!price) {
-    await ctx.answerCallbackQuery({ text: 'Invalid star pack selected' });
+    await ctx.answerCallbackQuery({ text: 'Paquete de estrellas inválido' });
     return;
   }
 
   try {
     await ctx.answerCallbackQuery();
     await ctx.replyWithInvoice(
-      `${stars} Selfi Stars`, // title
-      `Purchase ${stars} stars for image generation and training`, // description
+      `${stars} Estrellas Selfi`, // title
+      `Compra ${stars} estrellas para generar imágenes y entrenar`, // description
       `stars_${stars}`, // payload
       'XTR', // currency
       [{
-        label: `${stars} Stars`,
+        label: `${stars} Estrellas`,
         amount: price
       }] // prices
     );
@@ -78,7 +78,7 @@ composer.callbackQuery(/^buy_stars:(\d+)$/, async (ctx) => {
     }, 'Invoice sent');
   } catch (error) {
     logger.error({ error }, 'Failed to send invoice');
-    await ctx.reply('Sorry, there was an error processing your request.');
+    await ctx.reply('Lo sentimos, hubo un error procesando tu solicitud.');
   }
 });
 

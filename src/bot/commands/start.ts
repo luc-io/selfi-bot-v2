@@ -19,7 +19,7 @@ composer.command('start', async (ctx) => {
   
   if (!ctx.from) {
     logger.warn('No from field in context');
-    await ctx.reply('Could not identify user');
+    await ctx.reply('No se pudo identificar al usuario');
     return;
   }
 
@@ -56,26 +56,26 @@ composer.command('start', async (ctx) => {
 
     // Different welcome messages based on user status
     if (user.status === 'PENDING') {
-      const message = `🎨 <b>Welcome ${username}!</b>\n\n` +
-        `Selfi is currently in closed alpha. To join:\n\n` +
-        `1. Use /request to request access\n` +
-        `2. Wait for admin approval\n\n` +
-        `Once approved, you'll have access to all features and get welcome bonus stars! ✨`;
+      const message = `🎨 <b>¡Bienvenido ${username}!</b>\n\n` +
+        `Selfi está actualmente en alfa cerrada. Para unirte:\n\n` +
+        `1. Usa /request para solicitar acceso\n` +
+        `2. Espera la aprobación del administrador\n\n` +
+        `Una vez aprobado, ¡tendrás acceso a todas las funciones y recibirás estrellas de bienvenida! ✨`;
       
-      await ctx.reply(message);
+      await ctx.reply(message, { parse_mode: 'HTML' });
       logger.info({ telegramId }, 'Closed alpha welcome message sent');
     } else {
-      const message = `🎨 <b>Welcome ${username}!</b>\n\n` +
-        `You currently have <b>${user.stars} ⭐ stars</b>\n\n` +
-        `✨ <b>Available Commands:</b>\n` +
-        `• /gen - Generate stunning AI images\n` +
-        `• /stars - Get more stars\n` +
-        `• /balance - Check your balance\n` +
-        `• /help - View all commands\n\n` +
-        `💫 <i>Each image generation costs 3 stars. Use /stars to get started!</i>\n\n` +
-        `Need help? Use /help to learn more about all features.`;
+      const message = `🎨 <b>¡Bienvenido ${username}!</b>\n\n` +
+        `Actualmente tienes <b>${user.stars} ⭐ estrellas</b>\n\n` +
+        `✨ <b>Comandos Disponibles:</b>\n` +
+        `• /gen - Genera imágenes impresionantes con IA\n` +
+        `• /stars - Obtén más estrellas\n` +
+        `• /balance - Revisa tu saldo\n` +
+        `• /help - Ver todos los comandos\n\n` +
+        `💫 <i>Cada generación de imagen cuesta 3 estrellas. ¡Usa /stars para comenzar!</i>\n\n` +
+        `¿Necesitas ayuda? Usa /help para aprender más sobre todas las funciones.`;
 
-      await ctx.reply(message);
+      await ctx.reply(message, { parse_mode: 'HTML' });
       logger.info({ telegramId }, 'Welcome message sent');
     }
   } catch (error) {
@@ -85,7 +85,7 @@ composer.command('start', async (ctx) => {
       command: 'start'
     }, 'Error in start command');
     
-    await ctx.reply('Sorry, something went wrong while processing your request.');
+    await ctx.reply('Lo sentimos, algo salió mal mientras procesábamos tu solicitud.');
   }
 });
 

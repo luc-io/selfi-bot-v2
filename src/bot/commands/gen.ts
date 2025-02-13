@@ -145,21 +145,12 @@ composer.command("gen", hasSubscription, async (ctx) => {
   const { prompt, params } = parseInlineParams(ctx.message.text);
   
   if (!prompt) {
-    await ctx.reply(`❌ Please provide a prompt after the /gen command.
-Example: /gen a beautiful sunset --ar 16:9 --s 28 --c 3.5 --l trigger_word:1.7 --l another_lora:0.8
-
-Parameters:
---ar: Aspect ratio (16:9, 1:1)
---s: Steps (default: 28)
---c: CFG Scale (default: 3.5)
---seed: Seed value
---n: Number of images
---l: LoRA trigger word and scale (can be used multiple times, format: trigger_word:1.7)`);
+    await ctx.reply(`❌ Por favor escribe un prompt después del comando /gen.\nEjemplo: /gen a beautiful sunset --ar 16:9 --s 28 --c 3.5 --l trigger_word:1.7 --l another_lora:0.8\n\nParámetros:\n--ar: Relación de aspecto (16:9, 1:1)\n--s: Pasos (predeterminado: 28)\n--c: Escala CFG (predeterminado: 3.5)\n--seed: Valor de semilla\n--n: Número de imágenes\n--l: Palabra clave de LoRA y escala (puede usarse varias veces, formato: trigger_word:1.7)`);
     return;
   }
 
   if (!ctx.from?.id) {
-    await ctx.reply("Could not identify user");
+    await ctx.reply("No se pudo identificar al usuario");
     return;
   }
 
@@ -198,7 +189,7 @@ Parameters:
 
     const userParams = user?.parameters?.params as Record<string, any> | null;
     const generationParams = await convertInlineToGenerationParams(params, userParams);
-    const processingMsg = await ctx.reply("🎨 Generating your art...");
+    const processingMsg = await ctx.reply("🎨 Generando tu arte...");
 
     logger.info({ userParams: generationParams, prompt }, "Starting generation with parameters");
 
