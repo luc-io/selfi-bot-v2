@@ -7,7 +7,7 @@ import { config } from '../../config.js';
 
 const composer = new Composer<BotContext>();
 
-composer.command('start', async (ctx) => {
+composer.command('inicio', async (ctx) => {
   logger.info({
     config: {
       adminId: config.ADMIN_TELEGRAM_ID,
@@ -71,9 +71,9 @@ composer.command('start', async (ctx) => {
         `• /gen - Genera imágenes impresionantes con IA\n` +
         `• /stars - Obtén más estrellas\n` +
         `• /balance - Revisa tu saldo\n` +
-        `• /help - Ver todos los comandos\n\n` +
+        `• /ayuda - Ver todos los comandos\n\n` +
         `💫 <i>Cada generación de imagen cuesta 3 estrellas. ¡Usa /stars para comenzar!</i>\n\n` +
-        `¿Necesitas ayuda? Usa /help para aprender más sobre todas las funciones.`;
+        `¿Necesitas ayuda? Usa /ayuda para aprender más sobre todas las funciones.`;
 
       await ctx.reply(message, { parse_mode: 'HTML' });
       logger.info({ telegramId }, 'Welcome message sent');
@@ -82,7 +82,7 @@ composer.command('start', async (ctx) => {
     logger.error({
       err: error,
       telegramId: ctx.from.id.toString(),
-      command: 'start'
+      command: 'inicio'
     }, 'Error in start command');
     
     await ctx.reply('Lo sentimos, algo salió mal mientras procesábamos tu solicitud.');
