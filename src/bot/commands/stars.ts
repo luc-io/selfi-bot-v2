@@ -14,7 +14,7 @@ const starPacks = [
   [1000, 1000]  // 1000 stars for 1000 XTR
 ] as const;
 
-composer.command('stars', async (ctx) => {
+composer.command('estrellas', async (ctx) => {
   const telegramId = ctx.from?.id.toString();
   if (!telegramId || !ctx.from) {
     await ctx.reply('No se pudo identificar al usuario');
