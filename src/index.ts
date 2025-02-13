@@ -33,7 +33,7 @@ async function setupWebhook(bot: Bot<BotContext>): Promise<boolean> {
     await bot.api.setMyCommands([
       { command: 'inicio', description: 'Iniciar el bot' },
       { command: 'gen', description: 'Generar una nueva imagen con IA' },
-      { command: 'stars', description: 'Comprar estrellas (moneda para generaciones)' },
+      { command: 'estrellas', description: 'Comprar estrellas (moneda para generaciones)' },
       { command: 'balance', description: 'Consultar tu saldo de estrellas' },
       { command: 'ayuda', description: 'Mostrar todos los comandos disponibles' },
       ...(config.ADMIN_TELEGRAM_ID ? [
