@@ -70,41 +70,11 @@ const imagesRoutes: FastifyPluginAsync = async (fastify) => {
           })
         ]);
 
-        function buildInlineCommand(generation: typeof generations[0]): string {
-          const metadata = generation.metadata as any;
-          const steps = metadata?.num_inference_steps;
-          const scale = metadata?.guidance_scale;
-          const loras = metadata?.loras as Array<{ id: string; name: string; triggerWord: string; scale: number }> | undefined;
-
-          const parts = ['/gen', generation.prompt];
-
-          if (steps) {
-            parts.push(`--s ${steps}`);
-          }
-          if (scale) {
-            parts.push(`--c ${scale}`);
-          }
-          if (generation.seed) {
-            parts.push(`--seed ${generation.seed.toString()}`);
-          }
-          if (loras) {
-            loras.forEach(lora => {
-              parts.push(`--l ${lora.triggerWord}:${lora.scale}`);
-            });
-          }
-
-          return parts.join(' ');
-        }
-
         const images = generations.map(gen => {
-          const metadata = gen.metadata as Record<string, unknown> | null || {};
-          const storedLoras = (metadata.loras as Array<{ 
-            id: string; 
-            name: string; 
-            triggerWord: string; 
-            scale: number; 
-            weightsUrl: string 
-          }>) || [];
+          const metadata = gen.metadata as Record<string, any> | null || {};
+          
+          // Get LoRAs from metadata where they are stored
+          const loras = metadata.loras || [];
 
           return {
             id: gen.databaseId,
@@ -115,15 +85,14 @@ const imagesRoutes: FastifyPluginAsync = async (fastify) => {
             hasNsfw: false, // TODO: Add NSFW detection if implemented
             params: {
               ...metadata,
-              modelPath: gen.baseModel.modelPath
+              modelPath: gen.baseModel.modelPath,
             },
-            loras: storedLoras.map(lora => ({
+            loras: loras.map((lora: any) => ({
               path: lora.id,
               name: lora.name,
               triggerWord: lora.triggerWord,
               scale: lora.scale
-            })),
-            inlineCommand: buildInlineCommand(gen)
+            }))
           };
         });
 
