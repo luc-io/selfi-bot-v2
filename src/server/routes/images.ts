@@ -74,7 +74,7 @@ const imagesRoutes: FastifyPluginAsync = async (fastify) => {
           const metadata = generation.metadata as any;
           const steps = metadata?.num_inference_steps;
           const scale = metadata?.guidance_scale;
-          const loras = metadata?.loras as Array<{ triggerWord: string; scale: number }> | undefined;
+          const loras = metadata?.loras as Array<{ id: string; name: string; triggerWord: string; scale: number }> | undefined;
 
           const parts = ['/gen', generation.prompt];
 
@@ -96,25 +96,36 @@ const imagesRoutes: FastifyPluginAsync = async (fastify) => {
           return parts.join(' ');
         }
 
-        const images = generations.map(gen => ({
-          id: gen.databaseId,
-          url: gen.imageUrl,
-          prompt: gen.prompt,
-          seed: gen.seed ? Number(gen.seed) : undefined,
-          createdAt: gen.createdAt.toISOString(),
-          hasNsfw: false, // TODO: Add NSFW detection if implemented
-          params: {
-            ...(gen.metadata as Record<string, unknown> || {}),
-            modelPath: gen.baseModel.modelPath,
-          },
-          loras: gen.lora ? [{
-            path: gen.lora.databaseId,
-            name: gen.lora.name,
-            triggerWord: gen.lora.triggerWord,
-            scale: (gen.metadata as Record<string, unknown> || {}).loraScale as number || 1
-          }] : [],
-          inlineCommand: buildInlineCommand(gen)
-        }));
+        const images = generations.map(gen => {
+          const metadata = gen.metadata as Record<string, unknown> | null || {};
+          const storedLoras = (metadata.loras as Array<{ 
+            id: string; 
+            name: string; 
+            triggerWord: string; 
+            scale: number; 
+            weightsUrl: string 
+          }>) || [];
+
+          return {
+            id: gen.databaseId,
+            url: gen.imageUrl,
+            prompt: gen.prompt,
+            seed: gen.seed ? Number(gen.seed) : undefined,
+            createdAt: gen.createdAt.toISOString(),
+            hasNsfw: false, // TODO: Add NSFW detection if implemented
+            params: {
+              ...metadata,
+              modelPath: gen.baseModel.modelPath
+            },
+            loras: storedLoras.map(lora => ({
+              path: lora.id,
+              name: lora.name,
+              triggerWord: lora.triggerWord,
+              scale: lora.scale
+            })),
+            inlineCommand: buildInlineCommand(gen)
+          };
+        });
 
         logger.info({
           userDatabaseId: user.databaseId,
