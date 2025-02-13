@@ -7,6 +7,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserStatus {
+  PENDING
+  APPROVED
+}
+
 model User {
   databaseId        String            @id @default(cuid())
   telegramId        String            @unique
@@ -14,6 +19,7 @@ model User {
   stars             Int               @default(0)
   totalSpentStars   Int               @default(0)
   totalBoughtStars  Int               @default(0)
+  status            UserStatus        @default(PENDING)
   generations       Generation[]
   models            LoraModel[]
   trainings         Training[]
@@ -38,7 +44,7 @@ model UserParameters {
 model BaseModel {
   databaseId         String       @id @default(cuid())
   modelPath          String       @unique
-  costPerGeneration  Int          @default(1)
+  costPerGeneration  Int         @default(1)
   generations        Generation[]
   loras              LoraModel[]
   trainings          Training[]
