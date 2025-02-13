@@ -36,6 +36,7 @@ async function setupWebhook(bot: Bot<BotContext>): Promise<boolean> {
       { command: 'estrellas', description: 'Comprar estrellas (moneda para generaciones)' },
       { command: 'balance', description: 'Consultar tu saldo de estrellas' },
       { command: 'ayuda', description: 'Mostrar todos los comandos disponibles' },
+      { command: 'menu', description: 'Abrir los ajustes de la Mini App' },
       ...(config.ADMIN_TELEGRAM_ID ? [
         { command: 'grant', description: 'Otorgar estrellas a usuarios (Solo Admin)' }
       ] : [])
