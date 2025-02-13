@@ -60,10 +60,10 @@ composer.command('approve', async (ctx) => {
       prisma.starTransaction.create({
         data: {
           user: { connect: { telegramId: targetTelegramId } },
-          amount: 10,
+          amount: 12,
           type: 'ADMIN_GRANT',
           metadata: {
-            reason: 'Welcome bonus'
+            reason: 'Bono de bienvenida'
           }
         }
       })
@@ -73,8 +73,8 @@ composer.command('approve', async (ctx) => {
     await ctx.api.sendMessage(
       targetTelegramId,
       '🎉 <b>¡Bienvenido a Selfi!</b>\n\n' +
-      'Tu acceso ha sido aprobado y has recibido 10 ⭐ estrellas de bienvenida!\n\n' +
-      'Usa /help para ver todos los comandos disponibles.',
+      'Tu acceso ha sido aprobado y has recibido 12 ⭐ estrellas de bienvenida!\n\n' +
+      'Usa /ayuda para ver todos los comandos disponibles.',
       { parse_mode: 'HTML' }
     );
 
