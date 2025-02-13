@@ -69,10 +69,10 @@ composer.command('inicio', async (ctx) => {
         `Actualmente tienes <b>${user.stars} ⭐ estrellas</b>\n\n` +
         `✨ <b>Comandos Disponibles:</b>\n` +
         `• /gen - Genera imágenes impresionantes con IA\n` +
-        `• /stars - Obtén más estrellas\n` +
+        `• /estrellas - Obtén más estrellas\n` +
         `• /balance - Revisa tu saldo\n` +
         `• /ayuda - Ver todos los comandos\n\n` +
-        `💫 <i>Cada generación de imagen cuesta 3 estrellas. ¡Usa /stars para comenzar!</i>\n\n` +
+        `💫 <i>Cada generación de imagen cuesta 3 estrellas. ¡Usa /estrellas para comenzar!</i>\n\n` +
         `¿Necesitas ayuda? Usa /ayuda para aprender más sobre todas las funciones.`;
 
       await ctx.reply(message, { parse_mode: 'HTML' });
