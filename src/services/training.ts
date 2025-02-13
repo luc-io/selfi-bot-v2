@@ -82,7 +82,7 @@ if (!process.env.FAL_KEY) {
 
 const credentials = process.env.FAL_KEY;
 
-export class TrainingService {
+class TrainingService {
   private readonly activeTrainings = new Map<string, TrainingProgress>();
   private readonly TRAINING_COST = 150; // Training cost in stars
 
@@ -129,7 +129,14 @@ export class TrainingService {
   }
 
   public getTrainingProgress(requestId: string): TrainingProgress | null {
-    return this.activeTrainings.get(requestId) || null;
+    const progress = this.activeTrainings.get(requestId);
+    logger.info({
+      requestId,
+      hasProgress: !!progress,
+      currentState: progress,
+      allRequestIds: Array.from(this.activeTrainings.keys())
+    }, 'Training progress check');
+    return progress || null;
   }
 
   private async updateTrainingProgress(requestId: string, update: FalQueueStatusResponse) {
@@ -139,6 +146,14 @@ export class TrainingService {
     }
 
     try {
+      // Log raw update for analysis
+      logger.info({
+        requestId,
+        updateStatus: update.status,
+        logsCount: update.logs.length,
+        logs: update.logs.map(l => l.message)
+      }, 'Processing progress update');
+
       // Update progress based on logs
       let progress = 0;
       let message = STANDARD_MESSAGES.PROCESSING;
@@ -147,12 +162,21 @@ export class TrainingService {
       // Find progress message
       const progressLog = update.logs
         .map((log) => log.message)
-        .find((msg) => msg?.includes('progress'));
+        .find((msg) => msg?.includes('%'));
 
       if (progressLog) {
+        logger.info({
+          requestId,
+          progressLog
+        }, 'Found progress message');
+
         const match = progressLog.match(/(\d+)%/);
         if (match) {
           progress = parseInt(match[1]);
+          logger.info({
+            requestId,
+            parsedProgress: progress
+          }, 'Parsed progress value');
         }
       }
 
@@ -178,11 +202,19 @@ export class TrainingService {
       }
 
       // Update training status in memory
-      this.activeTrainings.set(requestId, {
+      const updatedProgress = {
         status: currentStatus,
         progress,
         message
-      });
+      };
+
+      this.activeTrainings.set(requestId, updatedProgress);
+
+      logger.info({
+        requestId,
+        previousProgress: this.activeTrainings.get(requestId),
+        newProgress: updatedProgress
+      }, 'Updated training progress');
 
       // Try to update training record in database
       const training = await prisma.training.findFirst({
@@ -201,9 +233,19 @@ export class TrainingService {
             }
           });
 
+          logger.info({
+            requestId,
+            trainingId: training.databaseId,
+            status: currentStatus
+          }, 'Updated training record status');
+
           // Remove from active trainings after a delay
           setTimeout(() => {
             this.activeTrainings.delete(requestId);
+            logger.info({
+              requestId,
+              remainingTrainings: Array.from(this.activeTrainings.keys())
+            }, 'Removed completed training from active map');
           }, 60 * 1000); // Remove after 1 minute
         }
       } else {
@@ -212,14 +254,6 @@ export class TrainingService {
           status: currentStatus
         }, 'Could not find training record to update status');
       }
-
-      logger.debug({ 
-        requestId, 
-        status: currentStatus, 
-        progress, 
-        message,
-        trainingId: training?.databaseId
-      }, 'Updated training progress');
 
     } catch (error) {
       logger.error({ 
@@ -255,6 +289,12 @@ export class TrainingService {
         return this.getMockResult(params.trigger_word);
       }
 
+      logger.info({
+        params,
+        totalActiveTrainings: this.activeTrainings.size,
+        activeRequestIds: Array.from(this.activeTrainings.keys())
+      }, 'Starting FAL training');
+
       const result = await fal.subscribe("fal-ai/flux-lora-fast-training", {
         input: {
           images_data_url: params.images_data_url,
@@ -265,19 +305,29 @@ export class TrainingService {
         } as FalTrainingInput,
         logs: true,
         onQueueUpdate: (update: FalQueueStatusResponse) => {
+          // Add detail logging
+          logger.info({
+            status: update.status,
+            requestId: update.requestId,
+            logsCount: update?.logs?.length,
+            firstLog: update?.logs?.[0]?.message,
+            lastLog: update?.logs?.[update.logs.length - 1]?.message
+          }, 'Received FAL queue update');
+
           if (update.status === "IN_PROGRESS") {
-            // Update progress tracking using the update's requestId
+            // Log before processing
+            logger.info({
+              requestId: update.requestId,
+              currentProgress: this.getTrainingProgress(update.requestId)
+            }, 'Before progress update');
+
             this.updateTrainingProgress(update.requestId, update);
 
-            // Log progress messages if available
-            if (update.logs && update.logs.length > 0) {
-              update.logs
-                .filter(log => log && log.message)
-                .forEach(log => logger.info({ 
-                  msg: log.message, 
-                  requestId: update.requestId 
-                }, 'Training progress'));
-            }
+            // Log after processing
+            logger.info({
+              requestId: update.requestId,
+              currentProgress: this.getTrainingProgress(update.requestId)
+            }, 'After progress update');
           }
         },
       }) as unknown as FalQueueResultResponse;
@@ -319,6 +369,12 @@ export class TrainingService {
               completedAt: new Date()
             }
           });
+
+          logger.info({
+            trainingId: training.databaseId,
+            requestId: result.requestId,
+            starsSpent: this.TRAINING_COST
+          }, 'Updated training record with stars spent');
         } else {
           logger.warn({ 
             requestId: result.requestId 
@@ -330,7 +386,9 @@ export class TrainingService {
         weightsUrl: trainingResult.weights.url,
         configUrl: trainingResult.config.url,
         requestId: result.requestId,
-        starsSpent: isTest ? 0 : this.TRAINING_COST
+        starsSpent: isTest ? 0 : this.TRAINING_COST,
+        totalActiveTrainings: this.activeTrainings.size,
+        activeRequestIds: Array.from(this.activeTrainings.keys())
       }, 'Training completed');
 
       return trainingResult;
@@ -340,3 +398,6 @@ export class TrainingService {
     }
   }
 }
+
+// Create and export a single instance
+export const trainingService = new TrainingService();
