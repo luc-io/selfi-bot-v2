@@ -13,8 +13,8 @@ composer.command('approve', async (ctx) => {
     return;
   }
 
-  // Check if command user is admin
-  if (ctx.from.id.toString() !== config.ADMIN_TELEGRAM_ID) {
+  // Check if admin ID is configured and if command user is admin
+  if (!config.ADMIN_TELEGRAM_ID || ctx.from.id.toString() !== config.ADMIN_TELEGRAM_ID.toString()) {
     logger.warn({
       telegramId: ctx.from.id.toString(),
       command: 'approve'
