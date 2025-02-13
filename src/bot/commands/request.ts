@@ -23,12 +23,12 @@ composer.command('request', async (ctx) => {
     });
 
     if (!user) {
-      await ctx.reply('Por favor inicia el bot con /start primero.');
+      await ctx.reply('Por favor inicia el bot con /inicio primero.');
       return;
     }
 
     if (user.status === 'APPROVED') {
-      await ctx.reply('¡Ya estás aprobado para usar Selfi! 🎉\n\nUsa /help para ver los comandos disponibles.');
+      await ctx.reply('¡Ya estás aprobado para usar Selfi! 🎉\n\nUsa /ayuda para ver los comandos disponibles.');
       return;
     }
 
