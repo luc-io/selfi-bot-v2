@@ -74,7 +74,7 @@ composer.command('grant', async (ctx) => {
     try {
       await ctx.api.sendMessage(
         parseInt(targetTelegramId),
-        `🎁 You received ${amount} stars from admin!`
+        `🎁 Recibiste ${amount} estrellas de regalo!`
       );
     } catch (error) {
       await ctx.reply('Note: Could not send notification to user (they might have blocked the bot)');
