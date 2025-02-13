@@ -31,6 +31,7 @@ composer.command('start', async (ctx) => {
     logger.info({ 
       telegramId, 
       stars: user.stars,
+      status: user.status,
       isNewUser: user.createdAt.getTime() === user.updatedAt.getTime(),
       createdAt: user.createdAt,
       updatedAt: user.updatedAt
@@ -52,22 +53,31 @@ composer.command('start', async (ctx) => {
     }
     
     const username = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name || 'there';
-    const message = `🎨 <b>Welcome ${username}!</b>
 
-You currently have <b>${user.stars} ⭐ stars</b>
+    // Different welcome messages based on user status
+    if (user.status === 'PENDING') {
+      const message = `🎨 <b>Welcome ${username}!</b>\n\n` +
+        `Selfi is currently in closed alpha. To join:\n\n` +
+        `1. Use /request to request access\n` +
+        `2. Wait for admin approval\n\n` +
+        `Once approved, you'll have access to all features and get welcome bonus stars! ✨`;
+      
+      await ctx.reply(message);
+      logger.info({ telegramId }, 'Closed alpha welcome message sent');
+    } else {
+      const message = `🎨 <b>Welcome ${username}!</b>\n\n` +
+        `You currently have <b>${user.stars} ⭐ stars</b>\n\n` +
+        `✨ <b>Available Commands:</b>\n` +
+        `• /gen - Generate stunning AI images\n` +
+        `• /stars - Get more stars\n` +
+        `• /balance - Check your balance\n` +
+        `• /help - View all commands\n\n` +
+        `💫 <i>Each image generation costs 3 stars. Use /stars to get started!</i>\n\n` +
+        `Need help? Use /help to learn more about all features.`;
 
-✨ <b>Available Commands:</b>
-• /gen - Generate stunning AI images
-• /stars - Get more stars
-• /balance - Check your balance
-• /help - View all commands
-
-💫 <i>Each image generation costs 3 stars. Use /stars to get started!</i>
-
-Need help? Use /help to learn more about all features.`;
-
-    await ctx.reply(message);
-    logger.info({ telegramId }, 'Welcome message sent');
+      await ctx.reply(message);
+      logger.info({ telegramId }, 'Welcome message sent');
+    }
   } catch (error) {
     logger.error({
       err: error,
