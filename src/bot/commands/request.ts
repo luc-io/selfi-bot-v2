@@ -9,7 +9,7 @@ const composer = new Composer<BotContext>();
 composer.command('request', async (ctx) => {
   if (!ctx.from) {
     logger.warn('No from field in context');
-    await ctx.reply('Could not identify user');
+    await ctx.reply('No se pudo identificar al usuario');
     return;
   }
 
@@ -23,28 +23,28 @@ composer.command('request', async (ctx) => {
     });
 
     if (!user) {
-      await ctx.reply('Please start the bot with /start first.');
+      await ctx.reply('Por favor inicia el bot con /start primero.');
       return;
     }
 
     if (user.status === 'APPROVED') {
-      await ctx.reply('You are already approved to use Selfi! 🎉\n\nUse /help to see available commands.');
+      await ctx.reply('¡Ya estás aprobado para usar Selfi! 🎉\n\nUsa /help para ver los comandos disponibles.');
       return;
     }
 
     // Notify admin about the access request
-    const requestMessage = `🔐 Access Request:\n\n` +
-      `User: ${ctx.from.username ? '@' + ctx.from.username : ctx.from.first_name}\n` +
+    const requestMessage = `🔐 Solicitud de Acceso:\n\n` +
+      `Usuario: ${ctx.from.username ? '@' + ctx.from.username : ctx.from.first_name}\n` +
       `ID: ${telegramId}\n\n` +
-      `To approve, use:\n` +
+      `Para aprobar, usa:\n` +
       `/approve ${telegramId}`;
 
     await notifyAdmin(ctx.api, requestMessage);
     
     // Confirm to user
     await ctx.reply(
-      '✨ Your access request has been sent!\n\n' +
-      'You will be notified once approved. Thank you for your interest in Selfi!'
+      '✨ ¡Tu solicitud de acceso ha sido enviada!\n\n' +
+      'Serás notificado una vez que seas aprobado. ¡Gracias por tu interés en Selfi!'
     );
 
     logger.info({ telegramId }, 'Access request sent to admin');
@@ -55,7 +55,7 @@ composer.command('request', async (ctx) => {
       command: 'request'
     }, 'Error in request command');
     
-    await ctx.reply('Sorry, something went wrong while processing your request.');
+    await ctx.reply('Lo sentimos, algo salió mal mientras procesábamos tu solicitud.');
   }
 });
 
