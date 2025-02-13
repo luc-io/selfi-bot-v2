@@ -170,7 +170,7 @@ class TrainingService {
           progressLog
         }, 'Found progress message');
 
-        const match = progressLog.match(/(\\d+)%/);
+        const match = progressLog.match(/(\d+)%/);
         if (match) {
           progress = parseInt(match[1]);
           logger.info({
