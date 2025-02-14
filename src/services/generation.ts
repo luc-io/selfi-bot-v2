@@ -92,11 +92,17 @@ export async function generateImage(params: GenerateImageParams & { telegramId: 
     throw new Error('Base model not found');
   }
 
-  // Handle seed - generate new only if not provided or 0
+  // Handle seed:
+  // - If seed is undefined/null -> generate new seed
+  // - If seed is 0 (aleatorio) -> generate new seed
+  // - Otherwise use the provided seed value exactly as is
   let seed = params.seed;
   if (seed === undefined || seed === null || seed === 0) {
     seed = generateFalSeed();
-    logger.info({ originalSeed: params.seed, generatedSeed: seed }, 'Generated new seed for request');
+    logger.info(
+      { originalSeed: params.seed, generatedSeed: seed }, 
+      params.seed === 0 ? 'Generated new seed - random requested' : 'Generated new seed - no seed provided'
+    );
   }
 
   const requestParams: FalRequestParams = {
