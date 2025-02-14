@@ -77,22 +77,78 @@ function parseInlineParams(text: string): { prompt: string; params: InlineParams
   return { prompt, params };
 }
 
+function convertAspectRatioToImageSize(ar: string): string | undefined {
+  const [width, height] = ar.split(':');
+  const ratio = `${width}:${height}`;
+  
+  switch (ratio) {
+    case '16:9':
+      return 'landscape_16_9';
+    case '9:16':
+      return 'portrait_16_9';
+    case '4:3':
+      return 'landscape_4_3';
+    case '3:4':
+      return 'portrait_4_3';
+    case '1:1':
+      return 'square';
+    default:
+      logger.warn({ ar }, 'Unknown aspect ratio parameter');
+      return undefined;
+  }
+}
+
 async function convertInlineToGenerationParams(
   inlineParams: InlineParams,
   userParams: Record<string, any> | null
 ): Promise<GenerationParams> {
-  // Start with saved user parameters
-  const baseParams: GenerationParams = {
-    imageSize: userParams?.image_size,
-    numInferenceSteps: userParams?.num_inference_steps,
-    guidanceScale: userParams?.guidance_scale,
-    numImages: userParams?.num_images,
-    enableSafetyChecker: userParams?.enable_safety_checker,
-    outputFormat: userParams?.output_format as 'jpeg' | 'png' | undefined,
-    loras: userParams?.loras,
-    // Use inline seed if provided, otherwise use saved seed
-    seed: inlineParams.seed !== undefined ? inlineParams.seed : userParams?.seed
+  // Initialize with minimal defaults
+  let baseParams: GenerationParams = {
+    enableSafetyChecker: true,
+    outputFormat: 'jpeg'
   };
+
+  // Apply user saved parameters if they exist
+  if (userParams) {
+    baseParams = {
+      ...baseParams,
+      imageSize: userParams.image_size,
+      numInferenceSteps: userParams.num_inference_steps,
+      guidanceScale: userParams.guidance_scale,
+      numImages: userParams.num_images,
+      enableSafetyChecker: userParams.enable_safety_checker,
+      outputFormat: userParams.output_format as 'jpeg' | 'png' | undefined,
+      loras: userParams.loras
+    };
+  }
+
+  // Override with inline parameters (these take precedence)
+  if (inlineParams.ar) {
+    const imageSize = convertAspectRatioToImageSize(inlineParams.ar);
+    if (imageSize) {
+      baseParams.imageSize = imageSize;
+      logger.info({ 
+        ar: inlineParams.ar,
+        resultSize: imageSize,
+        userParamsSize: userParams?.image_size 
+      }, 'Overriding image size from inline AR parameter');
+    }
+  }
+
+  if (inlineParams.s) {
+    baseParams.numInferenceSteps = inlineParams.s;
+  }
+
+  if (inlineParams.c) {
+    baseParams.guidanceScale = inlineParams.c;
+  }
+
+  if (inlineParams.n) {
+    baseParams.numImages = inlineParams.n;
+  }
+
+  // Handle seed specially - use inline if provided, otherwise use saved, defaulting to undefined
+  baseParams.seed = inlineParams.seed !== undefined ? inlineParams.seed : userParams?.seed;
 
   logger.info({ 
     inlineSeed: inlineParams.seed,
@@ -100,22 +156,8 @@ async function convertInlineToGenerationParams(
     finalSeed: baseParams.seed
   }, 'Processing seed parameter');
 
-  if (inlineParams.ar) {
-    const [width, height] = inlineParams.ar.split(':');
-    if (width === '16' && height === '9') {
-      baseParams.imageSize = 'portrait_16_9';
-    } else if (width === '1' && height === '1') {
-      baseParams.imageSize = 'square';
-    }
-    logger.info({ ar: inlineParams.ar, width, height, resultSize: baseParams.imageSize }, 'Processed aspect ratio parameter');
-  }
-
-  if (inlineParams.s) baseParams.numInferenceSteps = inlineParams.s;
-  if (inlineParams.c) baseParams.guidanceScale = inlineParams.c;
-  if (inlineParams.n) baseParams.numImages = inlineParams.n;
-
+  // Handle LoRAs if present in inline parameters
   if (inlineParams.loras && inlineParams.loras.length > 0) {
-    // Find all LoRAs by trigger words
     const loraPromises = inlineParams.loras.map(async ({ triggerWord, scale }) => {
       const lora = await prisma.loraModel.findFirst({
         where: { triggerWord },
