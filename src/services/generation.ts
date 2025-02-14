@@ -4,6 +4,7 @@ import type { GenerateImageParams, GenerationResponse } from '../types/generatio
 import { logger } from '../lib/logger.js';
 import { prisma } from '../lib/prisma.js';
 import { StarsService } from './stars.js';
+import { generateFalSeed } from '../utils/seed.js';
 
 interface LoraConfig {
   config: {
@@ -59,7 +60,11 @@ function validateAndConvertSeed(seed: number): bigint | null {
 }
 
 export async function generateImage(params: GenerateImageParams & { telegramId: string }): Promise<GenerationResponse> {
-  logger.info({ params }, 'Starting image generation with params');
+  logger.info({ 
+    originalParams: params,
+    seedType: typeof params.seed,
+    seedValue: params.seed
+  }, 'Starting image generation with params');
 
   // Get user database ID
   const user = await prisma.user.findUnique({
@@ -91,12 +96,22 @@ export async function generateImage(params: GenerateImageParams & { telegramId: 
     throw new Error('Base model not found');
   }
 
-  // Use the seed exactly as received from frontend
-  // Convert to number if it came as string
-  const seed = typeof params.seed === 'string' ? parseInt(params.seed, 10) : params.seed;
-  
-  if (seed === undefined || seed === null) {
-    throw new Error('Seed is required');
+  // Handle seed - use provided seed or generate new one if needed
+  let seed: number;
+
+  // Handle string seed case first
+  if (typeof params.seed === 'string') {
+    seed = parseInt(params.seed, 10);
+    if (isNaN(seed)) {
+      seed = generateFalSeed();
+      logger.info({ originalSeed: params.seed, generatedSeed: seed }, 'Generated new seed - invalid string seed');
+    }
+  } else if (params.seed === undefined || params.seed === null) {
+    seed = generateFalSeed();
+    logger.info({ generatedSeed: seed }, 'Generated new seed - no seed provided');
+  } else {
+    seed = params.seed;
+    logger.info({ usedSeed: seed }, 'Using provided seed value');
   }
 
   const requestParams: FalRequestParams = {
