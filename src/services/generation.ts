@@ -42,6 +42,7 @@ fal.config({
 });
 
 function validateAndConvertSeed(seed: number): bigint | null {
+  logger.info({ seed }, 'Converting seed to bigint');
   if (!seed) return null;
   
   try {
@@ -60,11 +61,17 @@ function validateAndConvertSeed(seed: number): bigint | null {
 }
 
 export async function generateImage(params: GenerateImageParams & { telegramId: string }): Promise<GenerationResponse> {
+  // Log the raw incoming parameters
   logger.info({ 
     originalParams: params,
     seedType: typeof params.seed,
-    seedValue: params.seed
-  }, 'Starting image generation with params');
+    seedValue: params.seed,
+    otherParams: {
+      prompt: params.prompt,
+      imageSize: params.imageSize,
+      lorasCount: params.loras?.length
+    }
+  }, 'Received generation request');
 
   // Get user database ID
   const user = await prisma.user.findUnique({
@@ -96,11 +103,12 @@ export async function generateImage(params: GenerateImageParams & { telegramId: 
     throw new Error('Base model not found');
   }
 
-  // Handle seed - use provided seed or generate new one if needed
+  // Handle seed
   let seed: number;
 
   // Handle string seed case first
   if (typeof params.seed === 'string') {
+    logger.info({ originalSeed: params.seed }, 'Converting string seed to number');
     seed = parseInt(params.seed, 10);
     if (isNaN(seed)) {
       seed = generateFalSeed();
@@ -111,7 +119,20 @@ export async function generateImage(params: GenerateImageParams & { telegramId: 
     logger.info({ generatedSeed: seed }, 'Generated new seed - no seed provided');
   } else {
     seed = params.seed;
-    logger.info({ usedSeed: seed }, 'Using provided seed value');
+    logger.info({ seed }, 'Using provided seed value');
+  }
+
+  // Log final seed decision
+  logger.info({ 
+    originalSeed: params.seed, 
+    finalSeed: seed,
+    isRandom: seed === 0 
+  }, 'Final seed decision');
+
+  // If seed is 0, generate a random seed
+  if (seed === 0) {
+    seed = generateFalSeed();
+    logger.info({ generatedSeed: seed }, 'Generated random seed for seed=0 request');
   }
 
   const requestParams: FalRequestParams = {
@@ -127,6 +148,13 @@ export async function generateImage(params: GenerateImageParams & { telegramId: 
     },
     logs: true
   };
+
+  // Log the final request parameters being sent to FAL
+  logger.info({ 
+    requestParams,
+    finalSeed: requestParams.input.seed,
+    originalSeed: params.seed
+  }, 'Sending request to FAL');
 
   // Get LoRA info if present
   let validLoraConfigs: LoraConfig[] = [];
@@ -171,7 +199,11 @@ export async function generateImage(params: GenerateImageParams & { telegramId: 
 
   try {
     const result = await fal.run('fal-ai/flux-lora', requestParams);
-    logger.info({ result }, 'Received FAL response');
+    logger.info({ 
+      resultSeed: result.data.seed,
+      requestSeed: seed,
+      seedMatch: result.data.seed === seed
+    }, 'Received FAL response');
 
     const images = Array.isArray(result.data.images) ? result.data.images : [result.data.images];
     
@@ -191,6 +223,8 @@ export async function generateImage(params: GenerateImageParams & { telegramId: 
       metadata: {
         prompt: params.prompt,
         seed: result.data.seed,
+        originalSeed: seed,
+        requestedSeed: params.seed,
         numImages: numImages
       }
     });
@@ -203,6 +237,8 @@ export async function generateImage(params: GenerateImageParams & { telegramId: 
         guidance_scale: requestParams.input.guidance_scale,
         enable_safety_checker: requestParams.input.enable_safety_checker,
         output_format: requestParams.input.output_format,
+        originalSeed: seed,
+        requestedSeed: params.seed,
         loras: validLoraConfigs.map(lora => ({
           id: lora.id,
           name: lora.name,
@@ -227,7 +263,10 @@ export async function generateImage(params: GenerateImageParams & { telegramId: 
 
       logger.info({ 
         imageId: savedImage.databaseId,
-        url: savedImage.imageUrl
+        url: savedImage.imageUrl,
+        finalSeed: result.data.seed,
+        originalSeed: seed,
+        requestedSeed: params.seed
       }, 'Saved generated image to database');
 
       return savedImage;
@@ -235,12 +274,15 @@ export async function generateImage(params: GenerateImageParams & { telegramId: 
 
     logger.info({ 
       generationResponse, 
-      savedImagesCount: savedImages.length 
+      savedImagesCount: savedImages.length,
+      finalSeed: result.data.seed,
+      originalSeed: seed,
+      requestedSeed: params.seed
     }, 'Generation and database save completed successfully');
     
     return generationResponse;
   } catch (error) {
-    logger.error({ error, params }, 'Generation failed');
+    logger.error({ error, params, usedSeed: seed }, 'Generation failed');
     throw error;
   }
 }
