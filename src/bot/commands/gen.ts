@@ -81,6 +81,7 @@ async function convertInlineToGenerationParams(
   inlineParams: InlineParams,
   userParams: Record<string, any> | null
 ): Promise<GenerationParams> {
+  // Start with saved user parameters
   const baseParams: GenerationParams = {
     imageSize: userParams?.image_size,
     numInferenceSteps: userParams?.num_inference_steps,
@@ -89,8 +90,15 @@ async function convertInlineToGenerationParams(
     enableSafetyChecker: userParams?.enable_safety_checker,
     outputFormat: userParams?.output_format as 'jpeg' | 'png' | undefined,
     loras: userParams?.loras,
-    seed: inlineParams.seed
+    // Use inline seed if provided, otherwise use saved seed
+    seed: inlineParams.seed !== undefined ? inlineParams.seed : userParams?.seed
   };
+
+  logger.info({ 
+    inlineSeed: inlineParams.seed,
+    savedSeed: userParams?.seed,
+    finalSeed: baseParams.seed
+  }, 'Processing seed parameter');
 
   if (inlineParams.ar) {
     const [width, height] = inlineParams.ar.split(':');
@@ -189,9 +197,17 @@ composer.command("gen", hasSubscription, async (ctx) => {
 
     const userParams = user?.parameters?.params as Record<string, any> | null;
     const generationParams = await convertInlineToGenerationParams(params, userParams);
-    const processingMsg = await ctx.reply("🎨 Generando tu arte...");
 
-    logger.info({ userParams: generationParams, prompt }, "Starting generation with parameters");
+    logger.info({ 
+      userParams: userParams,
+      generationParams: generationParams,
+      inlineSeed: params.seed,
+      savedSeed: userParams?.seed,
+      finalSeed: generationParams.seed,
+      prompt 
+    }, "Starting generation with parameters");
+
+    const processingMsg = await ctx.reply("🎨 Generando tu arte...");
 
     const response = await generateImage({
       telegramId: ctx.from.id.toString(),
@@ -210,7 +226,13 @@ composer.command("gen", hasSubscription, async (ctx) => {
       await ctx.replyWithMediaGroup(mediaGroup);
     }
 
-    logger.info({ messageId, chatId, imagesCount: response.images.length }, "Generation command completed successfully");
+    logger.info({ 
+      messageId, 
+      chatId, 
+      imagesCount: response.images.length,
+      usedSeed: generationParams.seed,
+      resultSeed: response.seed
+    }, "Generation command completed successfully");
 
   } catch (error) {
     logger.error({ messageId, chatId, error }, "Generation command failed");
