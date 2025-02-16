@@ -74,25 +74,27 @@ composer.callbackQuery(/^buy_stars:(\d+)$/, async (ctx) => {
     // Clear callback loading state
     await ctx.answerCallbackQuery();
 
-    const prices: readonly LabeledPrice[] = [{
-      label: `${stars} Estrellas`,
-      amount: price 
-    }];
-
     try {
       await ctx.reply("Enviando factura...");
 
+      const title = `${stars} Estrellas Selfi`;
+      const description = `Compra ${stars} ⭐ para generar imágenes con IA`;
+      const payload = `stars_${stars}`;
+      const providerToken = '';  // Empty for Stars
+      const currency = 'XTR';
+      const prices = [{
+        label: `${stars} Estrellas`,
+        amount: price
+      }];
+
       await ctx.api.sendInvoice(
         ctx.chat.id,
-        `${stars} Estrellas Selfi`,
-        `Compra ${stars} ⭐ para generar imágenes con IA`,
-        `stars_${stars}`,
-        '', // provider_token empty for Stars
-        'XTR', // currency
-        [{ // Passing the price directly here
-          label: `${stars} Estrellas`,
-          amount: price
-        }]
+        title,
+        description,
+        payload,
+        providerToken,
+        currency,
+        prices
       );
 
       logger.info({ 
