@@ -2,9 +2,9 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import fs from 'fs/promises';
 import path from 'path';
-import { prisma } from '../../db';
-import { FalError } from '../../errors';
-import { logger } from '../../logger';
+import { prisma } from '../../db.js';
+import { FalError } from '../../errors.js';
+import { logger } from '../../logger.js';
 
 export default async function imagesRoutes(fastify: FastifyInstance) {
   // Existing routes...
