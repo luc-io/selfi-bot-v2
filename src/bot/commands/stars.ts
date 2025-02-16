@@ -60,25 +60,46 @@ composer.callbackQuery(/^buy_stars:(\d+)$/, async (ctx) => {
 
   try {
     await ctx.answerCallbackQuery();
-    await ctx.replyWithInvoice(
-      `${stars} Estrellas Selfi`, // title
-      `Compra ${stars} estrellas para generar imágenes y entrenar`, // description
-      `stars_${stars}`, // payload
-      'XTR', // currency
-      [{
+
+    // Send invoice with proper parameters for Telegram Stars
+    await ctx.replyWithInvoice({
+      title: `${stars} Estrellas Selfi`,
+      description: `Compra ${stars} estrellas para generar imágenes y entrenar`,
+      payload: `stars_${stars}`,
+      provider_token: '', // Empty string for Telegram Stars payments
+      currency: 'XTR',    // Required for Stars payments
+      prices: [{
         label: `${stars} Estrellas`,
         amount: price
-      }] // prices
-    );
+      }],
+      max_tip_amount: 0,
+      suggested_tip_amounts: [],
+      start_parameter: `stars_${stars}`,
+      provider_data: JSON.stringify({
+        stars_amount: stars,
+        type: 'stars_purchase'
+      })
+    });
     
     logger.info({ 
       userId: ctx.from.id,
       stars,
       amount: price
-    }, 'Invoice sent');
+    }, 'Stars invoice sent');
   } catch (error) {
-    logger.error({ error }, 'Failed to send invoice');
-    await ctx.reply('Lo sentimos, hubo un error procesando tu solicitud.');
+    const err = error as Error;
+    logger.error({
+      error: err.message,
+      stack: err.stack,
+      stars,
+      price,
+      userId: ctx.from.id
+    }, 'Failed to send stars invoice');
+    
+    await ctx.reply(
+      'Lo sentimos, hubo un error al procesar tu solicitud de estrellas.\n' +
+      'Por favor intenta de nuevo en unos momentos.'
+    );
   }
 });
 
