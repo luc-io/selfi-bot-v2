@@ -7,6 +7,7 @@ import commands from './bot/commands/index.js';
 import { logger } from './lib/logger.js';
 import { autoRetry } from '@grammyjs/auto-retry';
 import { parseMode } from '@grammyjs/parse-mode';
+import { approvalMiddleware } from './bot/middlewares/checkApproval.js';
 
 // Add debug logging for environment variables
 logger.info({
@@ -32,12 +33,15 @@ async function setupWebhook(bot: Bot<BotContext>): Promise<boolean> {
     // Register bot commands
     await bot.api.setMyCommands([
       { command: 'inicio', description: 'Iniciar el bot' },
+      { command: 'request', description: 'Solicitar acceso al bot' },
+      { command: 'ayuda', description: 'Mostrar todos los comandos disponibles' },
+      // These commands will only be visible to approved users
       { command: 'gen', description: 'Generar una nueva imagen con IA' },
       { command: 'estrellas', description: 'Comprar estrellas (moneda para generaciones)' },
       { command: 'balance', description: 'Consultar tu saldo de estrellas' },
-      { command: 'ayuda', description: 'Mostrar todos los comandos disponibles' },
       { command: 'menu', description: 'Abrir los ajustes de la Mini App' },
       ...(config.ADMIN_TELEGRAM_ID ? [
+        { command: 'approve', description: 'Aprobar usuarios (Solo Admin)' },
         { command: 'grant', description: 'Otorgar estrellas a usuarios (Solo Admin)' }
       ] : [])
     ]);
@@ -78,11 +82,13 @@ async function main() {
       // Add middleware
       bot.api.config.use(autoRetry());
       bot.api.config.use(parseMode('HTML'));
-      logger.info('Bot middleware configured');
-
+      
+      // Add approval middleware before commands
+      bot.use(approvalMiddleware);
+      
       // Register commands
       bot.use(commands);
-      logger.info('Bot commands registered');
+      logger.info('Bot middleware and commands registered');
     } catch (error) {
       logger.error({ error }, 'Failed to initialize bot');
       throw error;
@@ -119,10 +125,20 @@ async function main() {
 
     // Error handling for bot
     bot.catch((err) => {
+      const ctx = err.ctx;
+      const error = err.error;
+      
       logger.error({
-        error: err,
+        error,
+        update_id: ctx.update.update_id,
+        from: ctx.from,
+        command: ctx.message?.text,
         msg: 'Bot error occurred'
       });
+
+      // Notify user of error
+      ctx.reply('Lo sentimos, ha ocurrido un error. Por favor intenta de nuevo más tarde.')
+        .catch(e => logger.error('Failed to send error message to user:', e));
     });
 
   } catch (error) {
