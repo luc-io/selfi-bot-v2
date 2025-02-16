@@ -80,15 +80,24 @@ composer.callbackQuery(/^buy_stars:(\d+)$/, async (ctx) => {
     }];
 
     try {
-      // Send invoice
+      // Send invoice with parameters in correct order
       await ctx.api.sendInvoice(
         ctx.chat.id,
-        `${stars} Estrellas Selfi`, // title
-        `Compra ${stars} ⭐ para generar imágenes con IA`, // description
-        `stars_${stars}`, // payload
-        '', // provider_token (empty for Stars)
-        'XTR', // currency
-        prices
+        `${stars} Estrellas Selfi`,
+        `Compra ${stars} ⭐ para generar imágenes con IA`,
+        `stars_${stars}`,
+        prices,
+        'XTR',
+        {
+          provider_token: '', // empty for Stars payments
+          start_parameter: `stars_${stars}`,
+          photo_url: undefined,
+          need_name: false,
+          need_phone_number: false,
+          need_email: false,
+          need_shipping_address: false,
+          is_flexible: false
+        }
       );
 
       logger.info({ 
