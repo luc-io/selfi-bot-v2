@@ -74,12 +74,12 @@ composer.callbackQuery(/^buy_stars:(\d+)$/, async (ctx) => {
       { // optional parameters
         provider_token: '', // Empty string for Stars payments
         start_parameter: `stars_${stars}`,
+        max_tip_amount: 0,
+        suggested_tip_amounts: [],
         provider_data: JSON.stringify({
           stars_amount: stars,
           type: 'stars_purchase'
-        }),
-        max_tip_amount: 0,
-        suggested_tip_amounts: []
+        })
       }
     );
     
