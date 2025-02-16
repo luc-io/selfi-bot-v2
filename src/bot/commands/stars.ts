@@ -80,7 +80,8 @@ composer.callbackQuery(/^buy_stars:(\d+)$/, async (ctx) => {
     }];
 
     try {
-      // Send invoice
+      await ctx.reply("Enviando factura...");
+
       await ctx.api.sendInvoice(
         ctx.chat.id,
         `${stars} Estrellas Selfi`,
@@ -88,16 +89,10 @@ composer.callbackQuery(/^buy_stars:(\d+)$/, async (ctx) => {
         `stars_${stars}`,
         '', // provider_token empty for Stars
         'XTR', // currency
-        prices, // prices array
-        {
-          start_parameter: `stars_${stars}`,
-          photo_url: undefined,
-          need_name: false,
-          need_phone_number: false,
-          need_email: false,
-          need_shipping_address: false,
-          is_flexible: false
-        }
+        [{ // Passing the price directly here
+          label: `${stars} Estrellas`,
+          amount: price
+        }]
       );
 
       logger.info({ 
