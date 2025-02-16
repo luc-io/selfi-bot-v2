@@ -1,4 +1,4 @@
-import { Composer } from 'grammy';
+import { Composer, NextFunction } from 'grammy';
 import { BotContext } from '../../types/bot.js';
 import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
@@ -59,11 +59,10 @@ const checkApproval = async (ctx: BotContext) => {
   }
 };
 
-export const approvalMiddleware = Composer.compose([
-  async (ctx: BotContext, next) => {
-    const canProceed = await checkApproval(ctx);
+export const approvalMiddleware = Composer.middleware((ctx: BotContext, next: NextFunction) => {
+  return checkApproval(ctx).then(canProceed => {
     if (canProceed) {
-      await next();
+      return next();
     }
-  }
-]);
+  });
+});
