@@ -3,6 +3,7 @@ import { BotContext } from '../../types/bot.js';
 import { getOrCreateUser } from '../../lib/user.js';
 import { logger } from '../../lib/logger.js';
 import { StarsService } from '../../services/stars.js';
+import { LabeledPrice } from '@grammyjs/types';
 
 const composer = new Composer<BotContext>();
 
@@ -48,6 +49,14 @@ composer.command(['estrellas', 'stars'], async (ctx) => {
 // Handle buy stars callbacks
 composer.callbackQuery(/^buy_stars:(\d+)$/, async (ctx) => {
   try {
+    if (!ctx.chat?.id) {
+      await ctx.answerCallbackQuery({ 
+        text: 'Error: No se pudo identificar el chat',
+        show_alert: true 
+      });
+      return;
+    }
+
     const match = ctx.callbackQuery.data.match(/^buy_stars:(\d+)$/);
     if (!match) {
       await ctx.answerCallbackQuery({ text: 'Paquete de estrellas inválido' });
@@ -65,8 +74,13 @@ composer.callbackQuery(/^buy_stars:(\d+)$/, async (ctx) => {
     // Clear callback loading state
     await ctx.answerCallbackQuery();
 
+    const prices: LabeledPrice[] = [{
+      label: `${stars} Estrellas`,
+      amount: price * 100 // in minimal units
+    }];
+
     try {
-      // Send simplified invoice for web
+      // Send invoice
       await ctx.api.sendInvoice(
         ctx.chat.id,
         `${stars} Estrellas Selfi`, // title
@@ -74,10 +88,7 @@ composer.callbackQuery(/^buy_stars:(\d+)$/, async (ctx) => {
         `stars_${stars}`, // payload
         '', // provider_token (empty for Stars)
         'XTR', // currency
-        [{ // prices
-          label: `${stars} Estrellas`,
-          amount: price * 100 // in minimal units
-        }]
+        prices
       );
 
       logger.info({ 
