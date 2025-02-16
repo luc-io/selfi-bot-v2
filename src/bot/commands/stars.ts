@@ -74,9 +74,9 @@ composer.callbackQuery(/^buy_stars:(\d+)$/, async (ctx) => {
     // Clear callback loading state
     await ctx.answerCallbackQuery();
 
-    const prices: LabeledPrice[] = [{
+    const prices: readonly LabeledPrice[] = [{
       label: `${stars} Estrellas`,
-      amount: price * 100 // in minimal units
+      amount: price // Do not multiply price
     }];
 
     try {
@@ -86,10 +86,10 @@ composer.callbackQuery(/^buy_stars:(\d+)$/, async (ctx) => {
         `${stars} Estrellas Selfi`,
         `Compra ${stars} ⭐ para generar imágenes con IA`,
         `stars_${stars}`,
-        '',  // provider_token empty for Stars
-        'XTR',
         prices,
+        'XTR',
         {
+          provider_token: '', // Empty for Stars
           start_parameter: `stars_${stars}`,
           photo_url: undefined,
           need_name: false,
@@ -103,7 +103,7 @@ composer.callbackQuery(/^buy_stars:(\d+)$/, async (ctx) => {
       logger.info({ 
         userId: ctx.from.id,
         stars,
-        price: price * 100
+        price
       }, 'Stars invoice sent');
 
     } catch (invoiceError) {
