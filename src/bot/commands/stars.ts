@@ -62,24 +62,26 @@ composer.callbackQuery(/^buy_stars:(\d+)$/, async (ctx) => {
     await ctx.answerCallbackQuery();
 
     // Send invoice with proper parameters for Telegram Stars
-    await ctx.replyWithInvoice({
-      title: `${stars} Estrellas Selfi`,
-      description: `Compra ${stars} estrellas para generar imágenes y entrenar`,
-      payload: `stars_${stars}`,
-      provider_token: '', // Empty string for Telegram Stars payments
-      currency: 'XTR',    // Required for Stars payments
-      prices: [{
+    await ctx.replyWithInvoice(
+      `${stars} Estrellas Selfi`, // title
+      `Compra ${stars} estrellas para generar imágenes y entrenar`, // description
+      `stars_${stars}`, // payload
+      'XTR', // currency
+      [{ // prices array
         label: `${stars} Estrellas`,
         amount: price
       }],
-      max_tip_amount: 0,
-      suggested_tip_amounts: [],
-      start_parameter: `stars_${stars}`,
-      provider_data: JSON.stringify({
-        stars_amount: stars,
-        type: 'stars_purchase'
-      })
-    });
+      { // optional parameters
+        provider_token: '', // Empty string for Stars payments
+        start_parameter: `stars_${stars}`,
+        provider_data: JSON.stringify({
+          stars_amount: stars,
+          type: 'stars_purchase'
+        }),
+        max_tip_amount: 0,
+        suggested_tip_amounts: []
+      }
+    );
     
     logger.info({ 
       userId: ctx.from.id,
