@@ -80,16 +80,16 @@ composer.callbackQuery(/^buy_stars:(\d+)$/, async (ctx) => {
     }];
 
     try {
-      // Send invoice with parameters in correct order
+      // Send invoice with correct parameter order
       await ctx.api.sendInvoice(
         ctx.chat.id,
         `${stars} Estrellas Selfi`,
         `Compra ${stars} ⭐ para generar imágenes con IA`,
         `stars_${stars}`,
-        prices,
+        '',  // provider_token empty for Stars
         'XTR',
+        prices,
         {
-          provider_token: '', // empty for Stars payments
           start_parameter: `stars_${stars}`,
           photo_url: undefined,
           need_name: false,
