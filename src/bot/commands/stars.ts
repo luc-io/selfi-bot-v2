@@ -76,20 +76,20 @@ composer.callbackQuery(/^buy_stars:(\d+)$/, async (ctx) => {
 
     const prices: readonly LabeledPrice[] = [{
       label: `${stars} Estrellas`,
-      amount: price // Do not multiply price
+      amount: price 
     }];
 
     try {
-      // Send invoice with correct parameter order
+      // Send invoice
       await ctx.api.sendInvoice(
         ctx.chat.id,
         `${stars} Estrellas Selfi`,
         `Compra ${stars} ⭐ para generar imágenes con IA`,
         `stars_${stars}`,
-        prices,
-        'XTR',
+        '', // provider_token empty for Stars
+        'XTR', // currency
+        prices, // prices array
         {
-          provider_token: '', // Empty for Stars
           start_parameter: `stars_${stars}`,
           photo_url: undefined,
           need_name: false,
