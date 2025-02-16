@@ -59,10 +59,13 @@ const checkApproval = async (ctx: BotContext) => {
   }
 };
 
-export const approvalMiddleware = Composer.middleware((ctx: BotContext, next: NextFunction) => {
-  return checkApproval(ctx).then(canProceed => {
-    if (canProceed) {
-      return next();
-    }
-  });
+const approvalComposer = new Composer<BotContext>();
+
+approvalComposer.use(async (ctx: BotContext, next: NextFunction) => {
+  const canProceed = await checkApproval(ctx);
+  if (canProceed) {
+    await next();
+  }
 });
+
+export const approvalMiddleware = approvalComposer.middleware();
