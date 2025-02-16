@@ -1,10 +1,12 @@
 import { FastifyInstance } from 'fastify';
+import imagesRoutes from './images';
 
-export function setupRoutes(app: FastifyInstance) {
+export async function setupRoutes(app: FastifyInstance) {
   // Health check route
   app.get('/health', async (request, reply) => {
     return { status: 'ok' };
   });
 
-  // Add other routes here
+  // Register routes
+  await app.register(imagesRoutes, { prefix: '/api/images' });
 }
