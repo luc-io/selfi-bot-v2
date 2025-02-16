@@ -47,56 +47,69 @@ composer.command(['estrellas', 'stars'], async (ctx) => {
 
 // Handle buy stars callbacks
 composer.callbackQuery(/^buy_stars:(\d+)$/, async (ctx) => {
-  const match = ctx.callbackQuery.data.match(/^buy_stars:(\d+)$/);
-  if (!match) return;
-
-  const stars = parseInt(match[1], 10);
-  const price = starPacks.find(([s]) => s === stars)?.[1];
-
-  if (!price) {
-    await ctx.answerCallbackQuery({ text: 'Paquete de estrellas inválido' });
-    return;
-  }
-
   try {
-    // First, answer the callback to remove loading state
+    const match = ctx.callbackQuery.data.match(/^buy_stars:(\d+)$/);
+    if (!match) {
+      await ctx.answerCallbackQuery({ text: 'Paquete de estrellas inválido' });
+      return;
+    }
+
+    const stars = parseInt(match[1], 10);
+    const price = starPacks.find(([s]) => s === stars)?.[1];
+
+    if (!price) {
+      await ctx.answerCallbackQuery({ text: 'Paquete de estrellas inválido' });
+      return;
+    }
+
+    // Clear callback loading state
     await ctx.answerCallbackQuery();
 
-    const title = `${stars} Estrellas Selfi`;
-    const description = `Compra ${stars} estrellas para generar imágenes y entrenar`;
+    try {
+      // Send simplified invoice for web
+      await ctx.api.sendInvoice(
+        ctx.chat.id,
+        `${stars} Estrellas Selfi`, // title
+        `Compra ${stars} ⭐ para generar imágenes con IA`, // description
+        `stars_${stars}`, // payload
+        '', // provider_token (empty for Stars)
+        'XTR', // currency
+        [{ // prices
+          label: `${stars} Estrellas`,
+          amount: price * 100 // in minimal units
+        }]
+      );
 
-    // Send invoice with proper parameters for Telegram Stars
-    const msg = await ctx.replyWithInvoice(
-      title,
-      description,
-      `stars_${stars}`, // payload
-      'XTR',            // currency must be XTR for Stars
-      [{ 
-        label: `${stars} Estrellas`,
-        amount: price * 100 // Amount in minimal units (cents)
-      }]
-    );
+      logger.info({ 
+        userId: ctx.from.id,
+        stars,
+        price: price * 100
+      }, 'Stars invoice sent');
 
-    logger.info({ 
-      userId: ctx.from.id,
-      stars,
-      price,
-      messageId: msg.message_id
-    }, 'Stars invoice sent');
+    } catch (invoiceError) {
+      logger.error({
+        error: invoiceError,
+        stars,
+        price,
+        userId: ctx.from.id
+      }, 'Failed to send invoice');
+
+      await ctx.reply(
+        'Hubo un error al procesar tu solicitud.\n' +
+        'Por favor intenta de nuevo en unos momentos.'
+      );
+    }
   } catch (error) {
-    const err = error as Error;
     logger.error({
-      error: err.message,
-      stack: err.stack,
-      stars,
-      price,
-      userId: ctx.from.id
-    }, 'Failed to send stars invoice');
-    
-    await ctx.reply(
-      'Lo sentimos, hubo un error al procesar tu solicitud de estrellas.\n' +
-      'Por favor intenta de nuevo en unos momentos.'
-    );
+      error,
+      userId: ctx.from?.id,
+      data: ctx.callbackQuery.data
+    }, 'Error in buy stars callback');
+
+    await ctx.answerCallbackQuery({
+      text: 'Lo sentimos, hubo un error. Por favor intenta de nuevo.',
+      show_alert: true
+    });
   }
 });
 
