@@ -14,7 +14,7 @@ const starPacks = [
   [1000, 1000]  // 1000 stars for 1000 XTR
 ] as const;
 
-composer.command('estrellas', async (ctx) => {
+composer.command(['estrellas', 'stars'], async (ctx) => {
   const telegramId = ctx.from?.id.toString();
   if (!telegramId || !ctx.from) {
     await ctx.reply('No se pudo identificar al usuario');
@@ -59,34 +59,29 @@ composer.callbackQuery(/^buy_stars:(\d+)$/, async (ctx) => {
   }
 
   try {
+    // First, answer the callback to remove loading state
     await ctx.answerCallbackQuery();
 
+    const title = `${stars} Estrellas Selfi`;
+    const description = `Compra ${stars} estrellas para generar imágenes y entrenar`;
+
     // Send invoice with proper parameters for Telegram Stars
-    await ctx.replyWithInvoice(
-      `${stars} Estrellas Selfi`, // title
-      `Compra ${stars} estrellas para generar imágenes y entrenar`, // description
+    const msg = await ctx.replyWithInvoice(
+      title,
+      description,
       `stars_${stars}`, // payload
-      'XTR', // currency
-      [{ // prices array
+      'XTR',            // currency must be XTR for Stars
+      [{ 
         label: `${stars} Estrellas`,
-        amount: price
-      }],
-      { // optional parameters
-        provider_token: '', // Empty string for Stars payments
-        start_parameter: `stars_${stars}`,
-        max_tip_amount: 0,
-        suggested_tip_amounts: [],
-        provider_data: JSON.stringify({
-          stars_amount: stars,
-          type: 'stars_purchase'
-        })
-      }
+        amount: price * 100 // Amount in minimal units (cents)
+      }]
     );
-    
+
     logger.info({ 
       userId: ctx.from.id,
       stars,
-      amount: price
+      price,
+      messageId: msg.message_id
     }, 'Stars invoice sent');
   } catch (error) {
     const err = error as Error;
